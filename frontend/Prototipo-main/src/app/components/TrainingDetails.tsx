@@ -19,8 +19,9 @@ export interface TrainingDetailsProps {
 }
 
 export function TrainingDetails({ training, onBack, onUpdateAttendance }: TrainingDetailsProps) {
-  const isConcluido = training.dataHora ? new Date(training.dataHora) < new Date(2026, 4, 4) : false;
-  const isAgendado = training.dataHora ? new Date(training.dataHora) > new Date(2026, 4, 4) : false;
+  const now = new Date();
+  const isConcluido = training.dataHora ? new Date(training.dataHora) < now : false;
+  const isAgendado = training.dataHora ? new Date(training.dataHora) > now : false;
 
   const [isDragging, setIsDragging] = useState(false);
   const [attendees, setAttendees] = useState<{ id: number; luc: string; loja: string; representante: string; status: string }[]>(

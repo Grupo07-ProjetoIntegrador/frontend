@@ -1441,7 +1441,7 @@ const initialTrainings = [
   { id: 11, tema: "Estratégias de Comunicação Interna", segmento: "Geral", data: "20 Mai 2026", hora: "15:30", dataHora: "2026-05-20T15:30:00", conteudo: "Melhoria no engajamento da equipe", isCancelado: false },
   { id: 12, tema: "Sustentabilidade no Varejo", segmento: "Geral", data: "10 Jun 2026", hora: "09:30", dataHora: "2026-06-10T09:30:00", conteudo: "Práticas ESG em lojas", isCancelado: false },
 ].map(t => {
-  const isAgendado = new Date(t.dataHora) > new Date(2026, 4, 4);
+  const isAgendado = new Date(t.dataHora) > new Date();
   return {
     ...t,
     attendanceList: isAgendado ? [] : generateVariedAttendance(t.id, t.tema)
@@ -1454,7 +1454,7 @@ export function TrainingManagement() {
   const [trainingsError, setTrainingsError] = useState("");
   const [activeTab, setActiveTab] = useState("list");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
-  const [calendarMonth, setCalendarMonth] = useState(new Date(2026, 4, 1)); // May 2026
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState<"todos" | "tema" | "segmento" | "data" | "conteudo" | "status">("todos");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateQuery, setDateQuery] = useState<Date>();
@@ -1498,7 +1498,7 @@ export function TrainingManagement() {
   }, []);
 
   // Dynamic KPI and Data Calculation
-  const now = new Date(2026, 4, 4); // May 4, 2026
+  const now = new Date();
   let startDate = new Date(2000, 0, 1);
   let endDate = new Date(2100, 0, 1);
 
