@@ -861,7 +861,7 @@ export function TrainingForm({ onBack, onSuccess, initialData }: TrainingFormPro
     <div className="flex-1 flex flex-col h-full overflow-hidden" style={{ backgroundColor: "#F7F4EF" }}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-6 py-4 md:px-8 max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="pt-5 pb-3 px-4 md:px-8 w-full flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <nav className="flex items-center text-xs text-gray-500 mb-2 font-medium">
               <button
@@ -904,10 +904,10 @@ export function TrainingForm({ onBack, onSuccess, initialData }: TrainingFormPro
       </header>
 
       {/* Main Form Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8">
+      <main className="flex-1 overflow-y-auto p-6 px-4 md:px-8">
         <form
           id="training-form"
-          className="max-w-5xl mx-auto space-y-6"
+          className="w-full space-y-6"
           onSubmit={handleSubmit(onSubmit)}
         >
           {/* Seção 1: Informações principais */}
