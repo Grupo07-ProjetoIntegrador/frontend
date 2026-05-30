@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import figmaAsset from "../../imports/logo_2024_(1).png";
 import {
@@ -14,18 +16,19 @@ import {
   ChevronLeft,
   LogOut,
 } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, active: false },
-  { label: "Lojistas", icon: Store, active: false },
-  { label: "Treinamentos", icon: GraduationCap, active: true },
-  { label: "Seguros", icon: ShieldCheck, active: false },
-  { label: "Manutenção", icon: Wrench, active: false },
-  { label: "Sinistros", icon: AlertTriangle, active: false },
-  { label: "Marketing", icon: Megaphone, active: false },
-  { label: "Comercial", icon: Briefcase, active: false },
-  { label: "Institucional", icon: Building2, active: false },
-  { label: "Relatórios", icon: BarChart2, active: false },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+  { label: "Lojistas", icon: Store },
+  { label: "Treinamentos", icon: GraduationCap, path: "/treinamentos" },
+  { label: "Seguros", icon: ShieldCheck },
+  { label: "Manutenção", icon: Wrench },
+  { label: "Sinistros", icon: AlertTriangle },
+  { label: "Marketing", icon: Megaphone },
+  { label: "Comercial", icon: Briefcase },
+  { label: "Institucional", icon: Building2 },
+  { label: "Relatórios", icon: BarChart2 },
 ];
 
 interface SidebarProps {
@@ -34,6 +37,50 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      if (!user) return;
+
+      setUserEmail(user.email || "");
+
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        if (error.status !== 406) {
+          console.error(error);
+        }
+      }
+
+      if (profile?.display_name && profile.display_name !== user.email) {
+        setUserName(profile.display_name);
+      } else if (user.user_metadata?.full_name) {
+        setUserName(user.user_metadata.full_name);
+      } else if (user.email) {
+        setUserName(user.email.split("@")[0]);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const initials = useMemo(() => {
+    const parts = userName.split(" ").filter(Boolean);
+    if (parts.length === 0) return "??";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }, [userName]);
+
   return (
     <div className="h-full flex-shrink-0" style={{ backgroundColor: "#8B1A1A" }}>
       <aside className="w-64 h-full flex flex-col flex-shrink-0" style={{ backgroundColor: "#8B1A1A" }}>
@@ -68,48 +115,54 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const isActive = item.path ? location.pathname === item.path : false;
+            const className = `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer text-left ${
+              isActive
+                ? "bg-white/15 text-white"
+                : "text-white/70 hover:bg-white/10 hover:text-white"
+            }`;
+
+            if (item.path) {
+              return (
+                <Link key={item.label} to={item.path} className={className}>
+                  <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={isActive ? 2 : 1.5} />
+                  <span className={isActive ? "font-medium" : ""}>{item.label}</span>
+                </Link>
+              );
+            }
+
             return (
-              <button
-                key={item.label}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer text-left ${
-                  item.active
-                    ? "bg-white/15 text-white"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <Icon
-                  className="w-4 h-4 flex-shrink-0"
-                  strokeWidth={item.active ? 2 : 1.5}
-                />
-                <span className={item.active ? "font-medium" : ""}>
-                  {item.label}
-                </span>
+              <button key={item.label} className={className} disabled>
+                <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+                <span>{item.label}</span>
               </button>
             );
           })}
         </nav>
 
         {/* User Profile Card */}
-        <div
-          className="mx-3 mb-4 p-3 rounded-xl flex items-center justify-between bg-white/10"
-        >
-          <div className="flex items-center gap-3 min-w-0 pr-2">
+        <div className="mx-3 mb-4 p-3 rounded-xl flex items-center justify-between bg-white/10">
+          <Link to="/perfil" className="flex items-center gap-3 min-w-0 pr-2">
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
               style={{ backgroundColor: "#D93030", color: "#ffffff" }}
             >
-              AM
+              {initials}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-white truncate">
-                Admin Master
+                {userName || "Usuário"}
               </p>
               <p className="text-xs text-white/60 truncate">
-                admin@flamboyant.com
+                {userEmail || ""}
               </p>
             </div>
-          </div>
+          </Link>
           <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate("/auth");
+            }}
             className="text-white/50 hover:text-white transition-colors flex-shrink-0"
             title="Sair"
           >
