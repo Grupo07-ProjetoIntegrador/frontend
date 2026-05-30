@@ -1327,6 +1327,7 @@ import { useEffect, useState, useRef } from "react";
 import { Plus, ExternalLink, Calendar, BookOpen, Tag, Search, ChevronDown, Filter, ChevronRight, Edit2, Trash2, Users, Clock, Star, Award, AlertTriangle, Store, UserCheck, Activity, Hash, List, ChevronLeft, CheckCircle2, XCircle } from "lucide-react";
 import { TrainingForm } from "./TrainingForm";
 import { TrainingDetails } from "./TrainingDetails";
+import { TrainingSettings } from "./TrainingSettings";
 import { StoreDetails } from "./StoreDetails";
 
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "./ui/popover";
@@ -1462,6 +1463,7 @@ export function TrainingManagement() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingTraining, setEditingTraining] = useState<any>(null);
   const [selectedTraining, setSelectedTraining] = useState<any>(null);
+  const [selectedTrainingSettings, setSelectedTrainingSettings] = useState<any>(null);
   const [trainingToDelete, setTrainingToDelete] = useState<any>(null);
   const [selectedStore, setSelectedStore] = useState<any>(null);
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
@@ -1706,6 +1708,18 @@ export function TrainingManagement() {
     await carregarTreinamentos();
   };
 
+  const openSettingsPage = (training: any) => {
+    setEditingTraining(null);
+    setSelectedTraining(training);
+    setSelectedTrainingSettings(training);
+  };
+
+  const openEditingPage = (training: any) => {
+    setSelectedTraining(null);
+    setSelectedTrainingSettings(null);
+    setEditingTraining(training);
+  };
+
   const filterOptions: { key: "todos" | "tema" | "segmento" | "data" | "conteudo" | "status"; label: string }[] = [
     { key: "todos", label: "Todos" },
     { key: "tema", label: "Tema" },
@@ -1714,21 +1728,6 @@ export function TrainingManagement() {
     { key: "conteudo", label: "Conteúdo" },
     { key: "status", label: "Status" },
   ];
-
-  if (selectedTraining) {
-    return (
-      <TrainingDetails 
-        training={selectedTraining} 
-        onBack={() => setSelectedTraining(null)} 
-        onUpdateAttendance={(id, list) => {
-          setTrainingsList(prev => prev.map(t => 
-            t.id === id ? { ...t, attendanceList: list } : t
-          ));
-          setSelectedTraining((prev: any) => ({ ...prev, attendanceList: list }));
-        }}
-      />
-    );
-  }
 
   const handlePrevMonth = () => setCalendarMonth(subMonths(calendarMonth, 1));
   const handleNextMonth = () => setCalendarMonth(addMonths(calendarMonth, 1));
@@ -1833,6 +1832,33 @@ export function TrainingManagement() {
         }}
         onSelectTraining={(training) => {
           setSelectedTraining(training);
+        }}
+      />
+    );
+  }
+
+  if (selectedTrainingSettings) {
+    return (
+      <TrainingSettings
+        training={selectedTrainingSettings}
+        onBack={() => setSelectedTrainingSettings(null)}
+        onEdit={() => openEditingPage(selectedTrainingSettings)}
+      />
+    );
+  }
+
+  if (selectedTraining) {
+    return (
+      <TrainingDetails 
+        training={selectedTraining} 
+        onBack={() => setSelectedTraining(null)} 
+        onOpenSettings={() => openSettingsPage(selectedTraining)}
+        onEditTraining={() => openEditingPage(selectedTraining)}
+        onUpdateAttendance={(id, list) => {
+          setTrainingsList(prev => prev.map(t => 
+            t.id === id ? { ...t, attendanceList: list } : t
+          ));
+          setSelectedTraining((prev: any) => ({ ...prev, attendanceList: list }));
         }}
       />
     );
