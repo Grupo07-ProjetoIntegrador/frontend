@@ -2,6 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabaseClient";
+import { 
+  User, 
+  Mail, 
+  CheckCircle, 
+  XCircle, 
+  Link2, 
+  Unlink, 
+  RefreshCw, 
+  Calendar, 
+  GraduationCap, 
+  ShieldCheck,
+  IdCard
+} from "lucide-react";
 
 interface ProfileData {
   user_id: string;
@@ -42,13 +55,13 @@ export function ProfilePage() {
 
       if (error || !profileData) {
         if (error && error.status === 403) {
-          toast.error("Acesso negado ao perfil. Verifique as politicas RLS no Supabase.");
+          toast.error("Acesso negado ao perfil. Verifique as políticas RLS no Supabase.");
         }
         const fallbackName =
           user.user_metadata?.full_name ||
           user.user_metadata?.name ||
           user.email?.split("@")[0] ||
-          "Usuario";
+          "Usuário";
 
         const { data: createdProfile, error: createError } = await supabase
           .from("profiles")
@@ -62,10 +75,10 @@ export function ProfilePage() {
 
         if (createError) {
           if (createError.status === 403) {
-            toast.error("Acesso negado ao perfil. Verifique as politicas RLS no Supabase.");
+            toast.error("Acesso negado ao perfil. Verifique as políticas RLS no Supabase.");
           }
           console.error(createError);
-          toast.error("Nao foi possivel carregar o perfil.");
+          toast.error("Não foi possível carregar o perfil.");
           setIsLoading(false);
           return;
         }
@@ -118,13 +131,13 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (searchParams.get("google") === "connected") {
-      toast.success("Conta Google conectada.");
+      toast.success("Conta Google conectada com sucesso.");
     }
     if (searchParams.get("google") === "missing_scope") {
       toast.error("A conta Google voltou sem o escopo gmail.send. Desconecte e reconecte para autorizar o envio de e-mail.");
     }
     if (searchParams.get("google") === "error") {
-      toast.error("Nao foi possivel conectar a conta Google.");
+      toast.error("Não foi possível conectar a conta Google.");
     }
   }, [searchParams]);
 
@@ -145,13 +158,12 @@ export function ProfilePage() {
     }
 
     setProfile({ ...profile, display_name: displayName });
-    toast.success("Nome atualizado.");
+    toast.success("Nome de perfil atualizado com sucesso.");
     setIsSaving(false);
   };
 
   const handleDisconnectGoogle = async () => {
     if (!profile) return;
-
     setIsDisconnecting(true);
 
     try {
@@ -168,7 +180,7 @@ export function ProfilePage() {
       toast.success("Conta Google desconectada e acesso revogado.");
     } catch (error) {
       console.error(error);
-      toast.error("Nao foi possivel desconectar a conta Google.");
+      toast.error("Não foi possível desconectar a conta Google.");
     } finally {
       setIsDisconnecting(false);
     }
@@ -176,7 +188,6 @@ export function ProfilePage() {
 
   const handleReconnectGoogle = async () => {
     if (!profile || !connectUrl) return;
-
     setIsDisconnecting(true);
 
     try {
@@ -189,11 +200,11 @@ export function ProfilePage() {
         throw new Error(message || "Erro ao desconectar Google");
       }
 
-      toast.success("Conta Google desconectada. Abrindo novo consentimento...");
+      toast.success("Conta antiga desconectada. Abrindo novo consentimento...");
       window.location.href = connectUrl;
     } catch (error) {
       console.error(error);
-      toast.error("Nao foi possivel reiniciar o consentimento do Google.");
+      toast.error("Não foi possível reiniciar o consentimento do Google.");
     } finally {
       setIsDisconnecting(false);
     }
@@ -201,124 +212,219 @@ export function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: "#F7F4EF" }}>
-        <span className="text-sm text-gray-500">Carregando perfil...</span>
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh]" style={{ backgroundColor: "#F7F4EF" }}>
+        <div className="w-8 h-8 border-4 border-[#8B1A1A] border-t-transparent rounded-full animate-spin mb-4" />
+        <span className="text-sm font-medium text-gray-600 tracking-wide">Carregando credenciais corporativas...</span>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: "#F7F4EF" }}>
-        <a href="/auth" className="text-sm text-[#8B1A1A] hover:underline">
-          Voce precisa estar logado para ver o perfil. Ir para login.
-        </a>
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]" style={{ backgroundColor: "#F7F4EF" }}>
+        <div className="bg-white border border-gray-200 p-8 rounded-2xl shadow-sm text-center max-w-md">
+          <XCircle className="w-12 h-12 text-[#8B1A1A] mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Acesso Restrito</h3>
+          <p className="text-sm text-gray-500 mb-6">Você precisa estar autenticado no ecossistema interno para gerenciar este perfil.</p>
+          <a href="/auth" className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold rounded-xl text-white bg-[#8B1A1A] hover:bg-[#7A1414] transition-all shadow-sm">
+            Ir para o Login Corporativo
+          </a>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 md:p-8" style={{ backgroundColor: "#F7F4EF" }}>
-      <div className="w-full max-w-none space-y-6">
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Perfil</h1>
-            <p className="text-sm text-gray-500">Gerencie seus dados e a conexao com o Google.</p>
+    <div className="flex-1 flex flex-col p-6 md:p-10" style={{ backgroundColor: "#F7F4EF" }}>
+      <div className="w-full max-w-7xl mx-auto space-y-8">
+        
+        {/* Banner do Topo - Identidade Flamboyant */}
+        <div className="relative overflow-hidden bg-[#8B1A1A] border-b-4 border-[#8B1A1A] rounded-2xl shadow-md px-6 py-8 md:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full translate-x-20 -translate-y-20 pointer-events-none" />
+          
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 bg-white/10 rounded-xl flex items-center justify-center border border-white/20 backdrop-blur-sm shadow-inner">
+              <User className="w-8 h-8 text-[#C8A882]" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#C8A882] uppercase tracking-widest">Painel de Controle Interno</p>
+              <h1 className="text-2xl font-bold text-white tracking-tight mt-1">Configurações de Perfil</h1>
+              <p className="text-sm text-white/80 mt-1">Gerencie suas chaves de integração e informações de identificação corporativa.</p>
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            ID do usuario: <span className="font-medium text-gray-700">{profile.user_id.slice(0, 8)}...</span>
+          
+          <div className="bg-black/10 border border-white/10 rounded-xl px-4 py-3 backdrop-blur-sm self-start sm:self-auto flex items-center gap-2.5">
+            <IdCard className="w-4 h-4 text-[#C8A882]" />
+            <div className="text-right">
+              <p className="text-[10px] uppercase font-bold text-white/50 tracking-wider">Identificador ID</p>
+              <p className="text-xs font-mono font-bold text-white">{profile.user_id.slice(0, 12)}...</p>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[2.2fr_1fr] gap-6">
-          <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-600">Nome</label>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
-                />
+        {/* Grid Principal */}
+        <div className="grid grid-cols-1 lg:grid-cols-[2.4fr_1fr] gap-8">
+          
+          {/* Coluna da Esquerda: Formulários */}
+          <div className="space-y-8">
+            
+            {/* Bloco 1: Dados Pessoais */}
+            <div className="bg-white border border-gray-200/80 rounded-2xl shadow-sm p-6 md:p-8 space-y-6">
+              <div className="border-b border-gray-100 pb-4">
+                <h2 className="text-base font-bold text-gray-900 tracking-tight">Dados de Identificação</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Estes dados serão embutidos nos relatórios e atas oficiais geradas.</p>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-600">E-mail</label>
-                <input
-                  value={profile.email}
-                  readOnly
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-500"
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-gray-400" /> Nome Completo
+                  </label>
+                  <input
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50/50 text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/20 focus:border-[#8B1A1A] transition-all"
+                    placeholder="Ex: Gabriel Alves Martins"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-gray-400" /> Endereço de E-mail
+                  </label>
+                  <input
+                    value={profile.email}
+                    readOnly
+                    className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-100/70 text-gray-500 font-medium cursor-not-allowed"
+                  />
+                </div>
               </div>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg text-white bg-[#D93030] hover:bg-[#C11C1C] transition-colors disabled:opacity-60"
-              >
-                {isSaving ? "Salvando..." : "Salvar"}
-              </button>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-bold rounded-xl text-white bg-[#8B1A1A] hover:bg-[#7A1414] transition-all shadow-sm active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Salvando alterações...
+                    </>
+                  ) : (
+                    "Salvar Alterações"
+                  )}
+                </button>
+              </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Google Connect</h2>
-                <p className="text-sm text-gray-500">Autorize sua conta para criar formularios.</p>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <span
-                  className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
+            {/* Bloco 2: Integração Google Connect */}
+            <div className="bg-white border border-gray-200/80 rounded-2xl shadow-sm p-6 md:p-8 space-y-6">
+              <div className="border-b border-gray-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 tracking-tight">Google Connect API</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Necessário para disparar e-mails automatizados e criar formulários integrados.</p>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Status:</span>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full ${
                     oauthStatus === "connected"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {oauthStatus === "connected" ? "Conectado" : "Desconectado"}
-                </span>
-                <a
-                  href={connectUrl}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg text-white bg-[#8B1A1A] hover:bg-[#7A1414] transition-colors"
-                >
-                  Conectar Google
-                </a>
-                <button
-                  onClick={handleDisconnectGoogle}
-                  disabled={isDisconnecting || oauthStatus !== "connected"}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isDisconnecting ? "Desconectando..." : "Desconectar Google"}
-                </button>
-                <button
-                  onClick={handleReconnectGoogle}
-                  disabled={isDisconnecting || oauthStatus !== "connected"}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-[#8B1A1A] text-[#8B1A1A] bg-white hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isDisconnecting ? "Reiniciando..." : "Desconectar e reconectar"}
-                </button>
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                      : "bg-amber-50 text-amber-700 border border-amber-200/60"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${oauthStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    {oauthStatus === "connected" ? "Canal Ativo" : "Desconectado"}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 p-4 rounded-xl">
+                Esta conexão permite que o robô do <strong>Módulo de Treinamento</strong> acesse de forma segura as permissões essenciais para criação de formulários de chamadas e controle de ausência em nome da administração do shopping.
+              </p>
+
+              {/* Botões de Ação Reprojetados */}
+              <div className="flex flex-wrap gap-3 pt-2">
+                {oauthStatus !== "connected" ? (
+                  <a
+                    href={connectUrl}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white bg-gray-900 hover:bg-black transition-all shadow-sm active:scale-[0.98]"
+                  >
+                    <Link2 className="w-4 h-4 text-[#C8A882]" />
+                    Conectar Conta Google
+                  </a>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleDisconnectGoogle}
+                      disabled={isDisconnecting}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all active:scale-[0.98] disabled:opacity-50"
+                    >
+                      <Unlink className="w-4 h-4 text-gray-400" />
+                      {isDisconnecting ? "Revogando acesso..." : "Desconectar Integração"}
+                    </button>
+                    
+                    <button
+                      onClick={handleReconnectGoogle}
+                      disabled={isDisconnecting}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl border border-[#8B1A1A] text-[#8B1A1A] bg-white hover:bg-red-50/50 transition-all active:scale-[0.98] disabled:opacity-50"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      {isDisconnecting ? "Reiniciando..." : "Desconectar e Reconectar"}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
+          {/* Coluna da Direita: Widgets de Status e Atalhos */}
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-3">
-              <h3 className="text-sm font-semibold text-gray-800">Atalhos rapidos</h3>
-              <div className="flex flex-col gap-2 text-sm text-gray-600">
-                <a href="/treinamentos" className="hover:text-[#8B1A1A]">
-                  Ver treinamentos
-                </a>
-                <a href="/treinamentos" className="hover:text-[#8B1A1A]">
-                  Abrir calendario
-                </a>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#8B1A1A] to-[#D93030] text-white rounded-2xl shadow-sm p-6 space-y-2">
-              <p className="text-sm uppercase tracking-wide text-white/70">Status do acesso</p>
-              <p className="text-2xl font-semibold">{oauthStatus === "connected" ? "Google OK" : "Google nao conectado"}</p>
-              <p className="text-xs text-white/80">
-                Conecte sua conta para gerar formularios com o seu proprio Google.
+            
+            {/* Widget Informativo Premium */}
+            <div className="bg-gradient-to-br from-[#8B1A1A] to-[#601010] text-white rounded-2xl shadow-md p-6 relative overflow-hidden border-b-4 border-[#C8A882]">
+              <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none" />
+              <ShieldCheck className="w-8 h-8 text-[#C8A882] mb-4" />
+              
+              <p className="text-xs uppercase tracking-widest text-white/60 font-bold">Status de Envio API</p>
+              <p className="text-2xl font-bold mt-1 tracking-tight">
+                {oauthStatus === "connected" ? "Google Autenticado" : "Ação Requerida"}
+              </p>
+              <p className="text-xs text-white/80 mt-2 leading-relaxed">
+                {oauthStatus === "connected" 
+                  ? "Seu token está ativo e pronto para disparar dossiês e convocações para as lojas franqueadas."
+                  : "Por favor, clique em 'Conectar Conta Google' ao lado para habilitar as automações de e-mails de treinamento."
+                }
               </p>
             </div>
+
+            {/* Links Rápidos Corporativos */}
+            <div className="bg-white border border-gray-200/80 rounded-2xl shadow-sm p-6 space-y-4">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-widest border-b border-gray-100 pb-2 flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-[#C8A882]" /> Atalhos de Gestão
+              </h3>
+              
+              <nav className="flex flex-col gap-2">
+                <a 
+                  href="/treinamentos" 
+                  className="flex items-center gap-2.5 text-sm text-gray-600 hover:text-[#8B1A1A] font-medium p-2 rounded-lg hover:bg-gray-50 transition-all group"
+                >
+                  <GraduationCap className="w-4 h-4 text-gray-400 group-hover:text-[#8B1A1A]" />
+                  Painel de Treinamentos
+                </a>
+                
+                <a 
+                  href="/treinamentos" 
+                  className="flex items-center gap-2.5 text-sm text-gray-600 hover:text-[#8B1A1A] font-medium p-2 rounded-lg hover:bg-gray-50 transition-all group"
+                >
+                  <Calendar className="w-4 h-4 text-gray-400 group-hover:text-[#8B1A1A]" />
+                  Cronograma & Calendário
+                </a>
+              </nav>
+            </div>
+
           </div>
         </div>
+
       </div>
     </div>
   );
