@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Menu } from "lucide-react";
 import { Toaster } from "sonner";
@@ -9,6 +10,23 @@ import { Outlet, useLocation } from "react-router";
 export default function Root() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
+  const LOCAL_TEST_STORAGE_KEY = "flamboyant.auth.test_mode";
+  const [localTestActive, setLocalTestActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = window.sessionStorage.getItem(LOCAL_TEST_STORAGE_KEY) === "1";
+    setLocalTestActive(v);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === LOCAL_TEST_STORAGE_KEY) {
+        setLocalTestActive(e.newValue === "1");
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   return (
     <div className="flex min-h-screen w-full overflow-hidden relative" style={{ backgroundColor: "#F7F4EF" }}>
@@ -45,6 +63,9 @@ export default function Root() {
           <div className="ml-2 relative flex items-center justify-center h-8 w-auto">
             <ImageWithFallback src={figmaAsset} alt="Flamboyant" className="h-full w-auto object-contain relative z-10 grayscale brightness-0 opacity-80 hover:opacity-100 transition-opacity" />
           </div>
+          {localTestActive && (
+            <span className="ml-3 inline-flex items-center rounded-full bg-[#C8A882] px-2 py-1 text-xs font-medium text-white">Modo teste</span>
+          )}
         </div>
 
         {/* Desktop Menu Button (when sidebar closed) */}
@@ -64,6 +85,11 @@ export default function Root() {
             <div className="relative flex items-center justify-center h-10 w-auto">
               <ImageWithFallback src={figmaAsset} alt="Flamboyant" className="h-full w-auto object-contain relative z-10 grayscale brightness-0 opacity-80 hover:opacity-100 transition-opacity" />
             </div>
+            {localTestActive && (
+              <div className="ml-auto mr-6">
+                <span className="inline-flex items-center rounded-full bg-[#C8A882] px-3 py-1 text-sm font-medium text-white">Modo de teste</span>
+              </div>
+            )}
           </div>
         </div>
         

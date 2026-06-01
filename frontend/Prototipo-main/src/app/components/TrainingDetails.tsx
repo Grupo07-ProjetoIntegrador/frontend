@@ -1,8 +1,20 @@
 import { useState, useCallback, useEffect } from "react";
-import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle2, User, Building, Calendar, BookOpen, UserPlus, Trash2, X, XCircle, Users, CheckSquare, Store } from "lucide-react";
+import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle2, User, Building, Calendar, BookOpen, UserPlus, Trash2, X, XCircle, Users, CheckSquare, Store, Link, Copy, Settings2, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { supabase } from "../lib/supabaseClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./ui/alert-dialog";
 
 export interface TrainingDetailsProps {
   training: {
@@ -16,9 +28,11 @@ export interface TrainingDetailsProps {
   };
   onBack: () => void;
   onUpdateAttendance?: (id: number | string, list: any[]) => void;
+  onOpenSettings?: () => void;
+  onEditTraining?: () => void;
 }
-
-export function TrainingDetails({ training, onBack, onUpdateAttendance }: TrainingDetailsProps) {
+export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSettings, onEditTraining }: TrainingDetailsProps) {
+  const API_BASE_URL = "http://localhost:8080";
   const now = new Date();
   const isConcluido = training.dataHora ? new Date(training.dataHora) < now : false;
   const isAgendado = training.dataHora ? new Date(training.dataHora) > now : false;
@@ -27,6 +41,14 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance }: Traini
   const [attendees, setAttendees] = useState<{ id: number; luc: string; loja: string; representante: string; status: string }[]>(
     training.attendanceList ? training.attendanceList : []
   );
+  const [formLinks, setFormLinks] = useState({ view: "", edit: "" });
+  const [formCreator, setFormCreator] = useState({ name: "", email: "" });
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isFormGenerating, setIsFormGenerating] = useState(false);
+  const [isFormDeleting, setIsFormDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isRegenerateDialogOpen, setIsRegenerateDialogOpen] = useState(false);
+  const [formError, setFormError] = useState("");
   const [showAttendanceBlock, setShowAttendanceBlock] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(training.attendanceList && training.attendanceList.length > 0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -36,6 +58,178 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance }: Traini
     setAttendees(newList);
     if (onUpdateAttendance) {
       onUpdateAttendance(training.id, newList);
+    }
+  };
+
+  const fetchFormLink = useCallback(async () => {
+    setIsFormLoading(true);
+    setFormError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/treinamentos/formulario?id=${training.id}`);
+
+      if (response.status === 404) {
+        setFormLinks({ view: "", edit: "" });
+        setFormCreator({ name: "", email: "" });
+        return false;
+      }
+
+      if (!response.ok) {
+        throw new Error("Erro ao buscar formulário");
+      }
+
+      const payload = await response.json();
+      const viewLink = payload.url_formulario || "";
+      const editLink = payload.url_edicao || "";
+      const creatorName = payload.creator_name || "";
+      const creatorEmail = payload.creator_email || "";
+      setFormLinks({
+        view: viewLink,
+        edit: editLink,
+      });
+      setFormCreator({ name: creatorName, email: creatorEmail });
+      return !!viewLink;
+    } catch (error) {
+      console.error("Erro ao buscar link do formulário:", error);
+      setFormError("Nao foi possivel carregar o link do formulário.");
+      return false;
+    } finally {
+      setIsFormLoading(false);
+    }
+  }, [API_BASE_URL, training.id]);
+
+  useEffect(() => {
+    fetchFormLink();
+  }, [fetchFormLink]);
+
+  useEffect(() => {
+    if (!isFormGenerating) return;
+
+    let attempts = 0;
+    const maxAttempts = 60;
+
+    const poll = async () => {
+      attempts += 1;
+      const hasLink = await fetchFormLink();
+
+      if (hasLink) {
+        setIsFormGenerating(false);
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        setIsFormGenerating(false);
+        setFormError("Tempo de geração excedido. Tente novamente.");
+      }
+    };
+
+    const interval = setInterval(poll, 2000);
+    poll();
+
+    return () => clearInterval(interval);
+  }, [fetchFormLink, isFormGenerating]);
+
+  const handleGenerateForm = async () => {
+    setIsFormGenerating(true);
+    setFormError("");
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id || "";
+      const url = `${API_BASE_URL}/api/treinamentos/gerar-formulario?id=${training.id}` + (userId ? `&user_id=${userId}` : "");
+      const response = await fetch(url, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Erro ao gerar formulario");
+      }
+
+      toast.info("Geracao do formulário iniciada.");
+    } catch (error) {
+      console.error("Erro ao gerar formulário:", error);
+      toast.error("Nao foi possivel iniciar a geracao do formulário.");
+      setIsFormGenerating(false);
+    } finally {
+      // O polling finaliza quando o link estiver disponivel.
+    }
+  };
+
+  const handleRegenerateForm = async () => {
+    setIsFormGenerating(true);
+    setFormError("");
+    setFormLinks({ view: "", edit: "" });
+    setFormCreator({ name: "", email: "" });
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id || "";
+      const url = `${API_BASE_URL}/api/treinamentos/regerar-formulario?id=${training.id}` + (userId ? `&user_id=${userId}` : "");
+      const response = await fetch(url, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Erro ao regerar formulário");
+      }
+
+      const payload = await response.json().catch(() => null);
+      if (payload && payload.drive_deleted === false) {
+        toast.info("Regeracao iniciada. O arquivo antigo no Drive pode ter permanecido.");
+      } else {
+        toast.info("Regeracao do formulário iniciada.");
+      }
+    } catch (error) {
+      console.error("Erro ao regerar formulário:", error);
+      toast.error("Não foi possivel regerar o formulário.");
+      setIsFormGenerating(false);
+    }
+  };
+
+  const handleDeleteForm = async () => {
+    setIsFormDeleting(true);
+    setFormError("");
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id || "";
+      const url = `${API_BASE_URL}/api/treinamentos/apagar-formulario?id=${training.id}` + (userId ? `&user_id=${userId}` : "");
+      const response = await fetch(url, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Erro ao apagar formulário");
+      }
+
+      const payload = await response.json().catch(() => null);
+      setFormLinks({ view: "", edit: "" });
+      setFormCreator({ name: "", email: "" });
+      if (payload && payload.drive_deleted === false) {
+        toast.info("Link removido no sistema, mas o arquivo no Drive pode ter permanecido.");
+      } else {
+        toast.success("Formulário removido.");
+      }
+    } catch (error) {
+      console.error("Erro ao apagar formulário:", error);
+      toast.error("Não foi possivel apagar o formulário.");
+    } finally {
+      setIsFormDeleting(false);
+    }
+  };
+
+  const handleCopyLink = async (value: string) => {
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Link copiado!");
+    } catch (error) {
+      console.error("Erro ao copiar link:", error);
+      toast.error("Nao foi possivel copiar o link.");
     }
   };
 
@@ -139,7 +333,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance }: Traini
           
           if (lines.length < 2) {
             toast.error("O arquivo CSV está vazio ou não contém dados suficientes.", { id: "upload-toast" });
-            return;
+            return;2
           }
 
           for (let i = 1; i < lines.length; i++) {
@@ -206,30 +400,50 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance }: Traini
   return (
     <div className="flex-1 min-h-screen flex flex-col p-4 md:p-8 overflow-y-auto" style={{ backgroundColor: "#F7F4EF" }}>
       {/* Header */}
-      <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-start gap-4">
-        <div className="flex items-start gap-3">
-          <button
-            onClick={onBack}
-            className="mt-0.5 md:mt-1 p-2 -ml-2 sm:ml-0 rounded-lg text-gray-500 hover:bg-white hover:text-[#D93030] transition-colors border border-transparent hover:border-gray-200 hover:shadow-sm shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Voltar"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl md:text-3xl mb-2 md:mb-3 leading-tight" style={{ color: "#8B1A1A" }}>
-              Palestra: {training.tema}
-            </h1>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 shrink-0" style={{ color: "#D93030" }} />
-                {training.data} às {training.hora}
-              </span>
-              <span className="hidden sm:block w-1 h-1 bg-gray-300 rounded-full shrink-0" />
-              <span className="flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4 shrink-0" style={{ color: "#D93030" }} />
-                <span className="line-clamp-2 sm:line-clamp-1">{training.conteudo}</span>
-              </span>
+      <div className="mb-6 md:mb-8 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <button
+              onClick={onBack}
+              className="mt-0.5 md:mt-1 p-2 -ml-2 sm:ml-0 rounded-lg text-gray-500 hover:bg-white hover:text-[#D93030] transition-colors border border-transparent hover:border-gray-200 hover:shadow-sm shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Voltar"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl md:text-3xl mb-2 md:mb-3 leading-tight" style={{ color: "#8B1A1A" }}>
+                Palestra: {training.tema}
+              </h1>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 shrink-0" style={{ color: "#D93030" }} />
+                  {training.data} às {training.hora}
+                </span>
+                <span className="hidden sm:block w-1 h-1 bg-gray-300 rounded-full shrink-0" />
+                <span className="flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4 shrink-0" style={{ color: "#D93030" }} />
+                  <span className="line-clamp-2 sm:line-clamp-1">{training.conteudo}</span>
+                </span>
+              </div>
             </div>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={onOpenSettings}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
+              title="Abrir configurações do treinamento"
+            >
+              <Settings2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Configurações</span>
+            </button>
+            <button
+              onClick={onEditTraining}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
+              title="Editar treinamento"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Editar</span>
+            </button>
           </div>
         </div>
       </div>
