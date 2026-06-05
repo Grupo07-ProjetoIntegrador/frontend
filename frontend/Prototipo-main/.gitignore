@@ -12,3 +12,6 @@ pnpm-debug.log*
 
 # production
 /dist
+
+credentials_OFF.json
+client_secrets.json
