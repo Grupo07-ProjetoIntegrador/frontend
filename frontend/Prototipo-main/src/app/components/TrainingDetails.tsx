@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle2, User, Building, Calendar, BookOpen, UserPlus, Trash2, X, XCircle, Users, CheckSquare, Store, Link, Copy, Settings2, Edit2 } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle2, User, Building, Calendar, BookOpen, UserPlus, Trash2, X, XCircle, Users, CheckSquare, Store, Link, Copy, Settings2, Edit2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
@@ -23,6 +23,7 @@ export interface TrainingDetailsProps {
     data: string;
     hora: string;
     conteudo: string;
+    capacidade_maxima?: number;
     dataHora?: string;
     attendanceList?: any[];
   };
@@ -32,15 +33,18 @@ export interface TrainingDetailsProps {
   onEditTraining?: () => void;
 }
 export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSettings, onEditTraining }: TrainingDetailsProps) {
+  console.log("👀 Dados brutos do Treinamento que chegaram no Details:", training);
+  
   const API_BASE_URL = "http://localhost:8080";
   const now = new Date();
   const isConcluido = training.dataHora ? new Date(training.dataHora) < now : false;
   const isAgendado = training.dataHora ? new Date(training.dataHora) > now : false;
 
   const [isDragging, setIsDragging] = useState(false);
-  const [attendees, setAttendees] = useState<{ id: number; luc: string; loja: string; representante: string; status: string }[]>(
-    training.attendanceList ? training.attendanceList : []
-  );
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null); 
+  const [attendees, setAttendees] = useState<{ id: number; luc: string; loja: string; representante: string; status: string }[]>([]);
+  const [attendeeToDelete, setAttendeeToDelete] = useState<{ id: string | number; nome: string } | null>(null);
   const [formLinks, setFormLinks] = useState({ view: "", edit: "" });
   const [formCreator, setFormCreator] = useState({ name: "", email: "" });
   const [isFormLoading, setIsFormLoading] = useState(false);
@@ -60,6 +64,89 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
       onUpdateAttendance(training.id, newList);
     }
   };
+  
+  const fetchPresencas = useCallback(async () => {
+    try {
+      // 1. Mostra qual ID o React está tentando buscar
+      console.log("🔎 Buscando presenças para o treinamento ID:", training.id);
+      
+      const response = await fetch(`http://localhost:8080/api/treinamentos/presencas?treinamento_id=${training.id}&_t=${Date.now()}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // 2. Mostra exatamente o que o Banco de Dados devolveu
+        console.log("✅ Dados recebidos do banco:", data);
+        
+        setAttendees(data);
+        
+        if (onUpdateAttendance) {
+          onUpdateAttendance(training.id, data);
+        }
+      } else {
+        // 3. Se o Go barrar a requisição (ex: porque o ID é 1 em vez de UUID), o erro aparece aqui!
+        console.error("🚨 O Servidor Go recusou a busca. Status:", response.status);
+      }
+    } catch (error) {
+      console.error("🚨 Erro grave de conexão:", error);
+    }
+  }, [training.id, onUpdateAttendance]);
+
+  const processFile = async (file: File) => {
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
+    const isXlsx = file.name.toLowerCase().endsWith('.xlsx');
+
+    if (!isCsv && !isXlsx) {
+      toast.error("Formato inválido. Por favor, envie uma planilha .csv ou .xlsx");
+      return;
+    }
+
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append("planilha", file);
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/treinamentos/upload?treinamento_id=${training.id}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Falha ao processar a planilha.");
+      }
+
+      const data = await response.json();
+      toast.success(data.mensagem);
+
+      // Aguarda 400 milissegundos para dar tempo do Supabase consolidar a escrita dos dados
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      // Agora sim busca a lista atualizada do banco
+      await fetchPresencas();
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao importar a planilha. Verifique se as lojas do arquivo existem no sistema.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  // Cria uma referência para guardar qual ID já foi carregado e impedir loops
+  const idCarregadoRef = useRef<string | number | null>(null);
+
+  useEffect(() => {
+    // Se o ID do treinamento atual for igual ao que já buscamos, bloqueia a chamada (mata o loop!)
+    if (idCarregadoRef.current === training?.id) {
+      return;
+    }
+
+    if (training && training.id) {
+      idCarregadoRef.current = training.id; // Registra que estamos buscando este ID
+      fetchPresencas();
+    }
+  }, [training?.id, fetchPresencas]);  
 
   const fetchFormLink = useCallback(async () => {
     setIsFormLoading(true);
@@ -151,8 +238,6 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
       console.error("Erro ao gerar formulário:", error);
       toast.error("Nao foi possivel iniciar a geracao do formulário.");
       setIsFormGenerating(false);
-    } finally {
-      // O polling finaliza quando o link estiver disponivel.
     }
   };
 
@@ -233,26 +318,106 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
     }
   };
 
-  const handleAddAttendee = (e: React.FormEvent) => {
+  const handleAddAttendee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAttendee.luc || !newAttendee.loja || !newAttendee.representante || !newAttendee.status) return;
     
-    const newId = attendees.length > 0 ? Math.max(...attendees.map(a => a.id)) + 1 : 1;
-    updateAttendees([...attendees, { 
-      id: newId, 
-      ...newAttendee
-    }]);
-    
-    setNewAttendee({ luc: "", loja: "", representante: "", status: "Presente" });
-    setIsAddModalOpen(false);
-    toast.success("Participante adicionado!");
+    // Validação inicial do front
+    if (!newAttendee.luc || !newAttendee.loja || !newAttendee.representante || !newAttendee.status) {
+      toast.error("Por favor, preencha todos os campos.");
+      return;
+    }
+
+    try {
+      // Envia os dados estruturados para o backend em Go
+      const response = await fetch("http://localhost:8080/api/treinamentos/presencas/manual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          treinamento_id: training.id,
+          luc: newAttendee.luc.trim(),
+          representante: newAttendee.representante.trim(),
+          status: newAttendee.status
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Participante adicionado com sucesso!");
+        
+        // Limpa o formulário do modal e fecha ele
+        setNewAttendee({ luc: "", loja: "", representante: "", status: "Presente" });
+        setIsAddModalOpen(false);
+
+        // Dá um pequeno intervalo e força a atualização da lista trazendo o dado real do banco
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await fetchPresencas(); 
+      } else {
+        // Exibe o erro retornado pelo Go (ex: se o LUC digitado não existir)
+        toast.error(data.erro || "Falha ao adicionar participante.");
+      }
+    } catch (error) {
+      console.error("Erro ao conectar com o servidor:", error);
+      toast.error("Erro de conexão com o servidor Go.");
+    }
   };
 
-  const handleRemoveAttendee = (id: number) => {
-    updateAttendees(attendees.filter(a => a.id !== id));
-    toast("Participante removido");
+  const handleRemoveAttendee = async (id: string | number) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/treinamentos/presencas/deletar?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Participante removido com sucesso!");
+        setAttendeeToDelete(null); // Fecha o modal limpando o estado
+        await fetchPresencas();    // Atualiza a tabela do banco
+      } else {
+        toast.error(data.erro || "Falha ao remover participante do banco.");
+      }
+    } catch (error) {
+      console.error("Erro ao conectar com o servidor:", error);
+      toast.error("Erro de conexão com o servidor Go.");
+    }
   };
 
+  // const handleRemoveAttendee = async (id: string | number) => {
+  //   // 1. Mostra a mensagem de confirmação nativa do navegador
+  //   const confirmou = window.confirm("Tem certeza que deseja remover esta presença do banco de dados?");
+    
+  //   if (!confirmou) return; // Se o usuário clicar em cancelar, interrompe aqui
+
+  //   try {
+  //     // 2. Faz a requisição DELETE para a nova rota do seu Go
+  //     const response = await fetch(`http://localhost:8080/api/treinamentos/presencas/deletar?id=${id}`, {
+  //       method: "DELETE",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       }
+  //     });
+
+  //     const data = await response.json();
+
+  //     if (response.ok) {
+  //       toast.success("Participante removido com sucesso!");
+        
+  //       // 3. Atualiza a lista na tela trazendo os dados zerados e atualizados do banco Go
+  //       await fetchPresencas();
+  //     } else {
+  //       toast.error(data.erro || "Falha ao remover participante do banco.");
+  //     }
+  //   } catch (error) {
+  //     console.error("Erro ao conectar com o servidor:", error);
+  //     toast.error("Erro de conexão com o servidor Go.");
+  //   }
+  // }; 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -269,7 +434,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       processFile(e.dataTransfer.files[0]);
     }
@@ -282,121 +447,16 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
     e.target.value = '';
   };
 
-  const processFile = (file: File) => {
-    const isCsv = file.name.toLowerCase().endsWith('.csv');
-    const isXlsx = file.name.toLowerCase().endsWith('.xlsx');
+  const ROOM_CAPACITY = training.capacidade_maxima ? Number(training.capacidade_maxima) : 50;;
+  const totalInscritos = attendees.length;   
+  const totalPresentes = attendees.filter(
+    (a) => a.status?.toUpperCase() === "PRESENTE"
+  ).length;    
+  const comparecimentoPercent = totalInscritos > 0 ? Math.round((totalPresentes / totalInscritos) * 100) : 0;   
+  const ocupacaoPercent = Math.min(100, Math.round((totalPresentes / ROOM_CAPACITY) * 100)); 
+  const lojasUnicas = new Set(attendees.map((a) => a.loja?.trim().toUpperCase()).filter(Boolean)).size; 
 
-    if (!isCsv && !isXlsx) {
-      toast.error("Por favor, envie um arquivo no formato .csv ou .xlsx", { id: "upload-toast" });
-      return;
-    }
-
-    toast.loading("Lendo arquivo...", { id: "upload-toast" });
-    
-    const reader = new FileReader();
-    
-    reader.onload = (event) => {
-      try {
-        const parsedData: { luc: string; loja: string; representante: string; status: string }[] = [];
-
-        if (isXlsx) {
-          const data = event.target?.result;
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const json = XLSX.utils.sheet_to_json(worksheet) as any[];
-
-          if (json.length === 0) {
-            toast.error("O arquivo Excel está vazio ou não contém dados suficientes.", { id: "upload-toast" });
-            return;
-          }
-
-          for (const row of json) {
-            // Mapping keys: "LUC", "Nome da Loja", "Nome do Representante", "Status"
-            const luc = row["LUC"] != null ? String(row["LUC"]).trim() : "";
-            const loja = row["Nome da Loja"] != null ? String(row["Nome da Loja"]).trim() : "";
-            const representante = row["Nome do Representante"] != null ? String(row["Nome do Representante"]).trim() : "";
-            const status = row["Status"] != null ? String(row["Status"]).trim() : "Presente";
-
-            if (luc || loja || representante) {
-              parsedData.push({
-                luc,
-                loja,
-                representante,
-                status
-              });
-            }
-          }
-        } else if (isCsv) {
-          const text = event.target?.result as string;
-          const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-          
-          if (lines.length < 2) {
-            toast.error("O arquivo CSV está vazio ou não contém dados suficientes.", { id: "upload-toast" });
-            return;2
-          }
-
-          for (let i = 1; i < lines.length; i++) {
-            const columns = lines[i].split(',').map(col => col.trim());
-            if (columns.length >= 3) {
-              const parsedStatus = columns[3] ? columns[3].trim().replace('\r', '') : 'Presente';
-              parsedData.push({
-                luc: columns[0],
-                loja: columns[1],
-                representante: columns[2],
-                status: parsedStatus
-              });
-            }
-          }
-        }
-
-        const newData: { id: number; luc: string; loja: string; representante: string; status: string }[] = [];
-        let currentMaxId = attendees.length > 0 ? Math.max(...attendees.map(a => a.id)) : 0;
-
-        for (const newItem of parsedData) {
-          const isDuplicate = attendees.some(
-            a => a.luc === newItem.luc && a.representante === newItem.representante
-          ) || newData.some(
-            a => a.luc === newItem.luc && a.representante === newItem.representante
-          );
-
-          if (!isDuplicate) {
-            newData.push({ ...newItem, id: ++currentMaxId });
-          }
-        }
-
-        if (newData.length > 0) {
-          updateAttendees([...attendees, ...newData]);
-          toast.success(`${newData.length} participante(s) adicionado(s) com sucesso!`, { id: "upload-toast" });
-          setIsDataLoaded(true);
-        } else {
-          toast.info("Nenhum novo participante adicionado. Todas as entradas já existiam ou são inválidas.", { id: "upload-toast" });
-        }
-
-      } catch (error) {
-        toast.error("Ocorreu um erro ao processar o arquivo.", { id: "upload-toast" });
-      }
-    };
-
-    reader.onerror = () => {
-      toast.error("Erro na leitura do arquivo.", { id: "upload-toast" });
-    };
-
-    if (isXlsx) {
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.readAsText(file);
-    }
-  };
-
-  const ROOM_CAPACITY = 50;
-  const isListEmpty = attendees.length === 0;
-  const totalInscritos = attendees.length;
-  const totalPresentes = attendees.filter(a => a.status === 'Presente').length;
-  const comparecimentoPercent = totalInscritos > 0 ? Math.round((totalPresentes / totalInscritos) * 100) : 0;
-  const ocupacaoPercent = Math.min(100, Math.round((totalPresentes / ROOM_CAPACITY) * 100));
-  const lojasUnicas = new Set(attendees.map(a => a.loja)).size;
-
+  
   return (
     <div className="flex-1 min-h-screen flex flex-col p-4 md:p-8 overflow-y-auto" style={{ backgroundColor: "#F7F4EF" }}>
       {/* Header */}
@@ -449,8 +509,60 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
       </div>
 
       <div className="w-full space-y-8">
+        
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+          
+          {/* Card 1: Comparecimento */}
+          <Card className="bg-white border-gray-200 shadow-sm transition-all duration-700">
+            <CardHeader className="flex flex-row items-center justify-between pb-1 px-4 pt-4">
+              <CardTitle className="text-xs font-medium text-gray-600">Comparecimento</CardTitle>
+              <Users className="h-3.5 w-3.5 text-gray-400" />
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="text-xl font-bold text-gray-900">
+                {comparecimentoPercent}%
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {totalPresentes} presentes / {totalInscritos} inscritos
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Ocupação da Sala */}
+          <Card className="bg-white border-gray-200 shadow-sm transition-all duration-700">
+            <CardHeader className="flex flex-row items-center justify-between pb-1 px-4 pt-4">
+              <CardTitle className="text-xs font-medium text-gray-600">Ocupação da Sala</CardTitle>
+              <CheckSquare className="h-3.5 w-3.5 text-gray-400" />
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="text-xl font-bold text-gray-900">
+                {ocupacaoPercent}%
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {totalPresentes} ocupadas / {ROOM_CAPACITY} vagas
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Card 3: Lojas Representadas */}
+          <Card className="bg-white border-gray-200 shadow-sm transition-all duration-700">
+            <CardHeader className="flex flex-row items-center justify-between pb-1 px-4 pt-4">
+              <CardTitle className="text-xs font-medium text-gray-600">Lojas Representadas</CardTitle>
+              <Store className="h-3.5 w-3.5 text-gray-400" />
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="text-xl font-bold text-gray-900">
+                {lojasUnicas}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Lojas diferentes nesta turma
+              </p>
+            </CardContent>
+          </Card>          
+        </div>
+        {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
           <Card className={`bg-white border-gray-200 shadow-sm transition-all duration-700 ease-in-out ${isListEmpty ? 'opacity-60' : 'opacity-100'}`}>
             <CardHeader className="flex flex-row items-center justify-between pb-1 px-4 pt-4">
               <CardTitle className="text-xs font-medium text-gray-600">Comparecimento</CardTitle>
@@ -483,8 +595,8 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
 
           <Card className={`bg-white border-gray-200 shadow-sm transition-all duration-700 ease-in-out ${isListEmpty ? 'opacity-60' : 'opacity-100'}`}>
             <CardHeader className="flex flex-row items-center justify-between pb-1 px-4 pt-4">
-               <CardTitle className="text-xs font-medium text-gray-600">Lojas Representadas</CardTitle>
-               <Store className="h-3.5 w-3.5 text-gray-400" />
+              <CardTitle className="text-xs font-medium text-gray-600">Lojas Representadas</CardTitle>
+              <Store className="h-3.5 w-3.5 text-gray-400" />
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <div className={`text-xl font-bold text-gray-900 transition-opacity duration-500 delay-100 ${isListEmpty ? 'opacity-50' : 'opacity-100'}`}>
@@ -495,7 +607,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
               </p>
             </CardContent>
           </Card>
-        </div>
+        </div> */}
 
         {isAgendado && attendees.length === 0 && !showAttendanceBlock ? (
           <Card className="bg-gray-50/50 border-dashed border-2 border-gray-200 shadow-none mb-8 w-full flex-1 flex">
@@ -507,7 +619,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
               <p className="text-sm text-gray-500 max-w-md mb-8">
                 Este treinamento ainda não ocorreu. A lista de presença será disponibilizada após a sua realização.
               </p>
-              <button 
+              <button
                 onClick={() => setShowAttendanceBlock(true)}
                 className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors shadow-sm"
               >
@@ -519,98 +631,114 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
         ) : (
           <>
             {/* Dropzone */}
-            <div 
-              className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-colors ${
-                isDragging ? 'border-[#C4151F] bg-red-50' : 'border-gray-300 hover:border-gray-400 bg-white shadow-sm'
-              }`}
+            <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center mt-6 mb-8 transition-colors duration-200 ${
+                isDragging ? "border-red-500 bg-red-50" : "border-gray-300 bg-white hover:bg-gray-50"
+              }`}
             >
-              <UploadCloud className={`w-10 h-10 mb-3 ${isDragging ? 'text-[#C4151F]' : 'text-gray-400'}`} />
-              <h3 className="text-base font-medium text-gray-900 mb-1">Importar Lista de Presença</h3>
-              <p className="text-sm text-gray-500 text-center mb-4 max-w-md">
+              {/* Input Oculto */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".csv, .xlsx"
+                onChange={handleFileInput}
+              />
+
+              <UploadCloud className={`w-12 h-12 mb-4 transition-colors ${isDragging ? "text-red-500" : "text-gray-400"}`} />
+
+              <h3 className="text-lg font-semibold" style={{ color: "#1F2937" }}>
+                Importar Lista de Presença
+              </h3>
+
+              <p className="text-sm text-gray-500 mt-1 text-center max-w-md">
                 Arraste e solte o arquivo da lista de presença (CSV ou XLSX) ou clique para selecionar.
               </p>
-              <label className="cursor-pointer inline-flex items-center justify-center px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors shadow-sm">
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Selecionar Arquivo
-                <input type="file" className="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleFileInput} />
-              </label>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="mt-6 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+              >
+                {isUploading ? (
+                  "Processando e Salvando..."
+                ) : (
+                  <>
+                    <FileSpreadsheet className="w-4 h-4" /> Selecionar Arquivo
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Upload Section / Lista Consolidada */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full flex-1 flex flex-col mb-8">
-              <div className="px-4 md:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <h2 className="text-gray-800 font-semibold text-lg flex items-center gap-2">
-                    <Users className="w-5 h-5" style={{ color: "#D93030" }} />
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-8">
+              {/*Cabecalho da tabela*/}
+              <div className="p-4 md:p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Users className="w-5 h-5 text-red-600" />
+                  <h3 className="text-lg font-semibold text-gray-900">
                     Lista de Presença Consolidada
-                  </h2>
-                  <span className="text-xs font-medium px-3 py-1 rounded-full self-start sm:self-auto bg-red-50 border border-red-200" style={{ color: "#D93030" }}>
+                  </h3>
+                  {/*O react conta quantas pessoas tem na lista automaticamente*/}
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-100">
                     {attendees.length} presenças registradas
                   </span>
                 </div>
-                <div className="flex justify-end pt-4 sm:pt-0">
-                  <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Adicionar Manualmente
-                  </button>
-                </div>
+                <button onClick={() => setIsAddModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors">
+                  <Plus className="w-4 h-4" /> Adicionar Manualmente
+                </button>
               </div>
-              
-              <div className="flex-1 overflow-x-auto p-0">
+              {/*Corpo da tabela*/}
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50/80 text-gray-500 font-medium border-b border-gray-200 sticky top-0 z-10">
+                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-500">
                     <tr>
-                      <th className="px-6 py-3 whitespace-nowrap font-medium">LUC</th>
-                      <th className="px-6 py-3 whitespace-nowrap font-medium">Loja</th>
-                      <th className="px-6 py-3 whitespace-nowrap font-medium">Representante</th>
-                      <th className="px-6 py-3 text-center whitespace-nowrap font-medium">Status</th>
-                      <th className="px-6 py-3 text-right whitespace-nowrap font-medium">Ações</th>
+                      <th className="px-6 py-3 font-medium">LUC</th>
+                      <th className="px-6 py-3 font-medium">Loja</th>
+                      <th className="px-6 py-3 font-medium">Representante</th>
+                      <th className="px-6 py-3 font-medium">Status</th>
+                      <th className="px-6 py-3 font-medium text-center">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 bg-white">
-                    {attendees.map((attendee) => (
-                      <tr key={attendee.id} className="hover:bg-gray-50/50 transition-colors group">
-                        <td className="px-6 py-4 text-gray-500 whitespace-nowrap font-mono">
-                          {attendee.luc ? attendee.luc.replace(/\D/g, '').slice(0, 3) : ''}
-                        </td>
-                        <td className="px-6 py-4 text-gray-900 font-medium whitespace-nowrap">
-                          {attendee.loja}
-                        </td>
-                        <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
-                          {attendee.representante}
-                        </td>
-                        <td className="px-6 py-4 text-center whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            attendee.status === 'Presente'
-                              ? 'bg-green-50 text-green-700'
-                              : 'bg-red-50 text-red-700'
-                          }`}>
-                            {attendee.status === 'Presente' ? "Presente" : "Ausente"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <button
-                            onClick={() => handleRemoveAttendee(attendee.id)}
-                            className="text-gray-500 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {attendees.length === 0 && (
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {/* Se alista estiver vazia, mostra mensagem amigavel*/}
+                    {attendees.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                          Nenhum participante registrado.
+                          Nenhuma presença registrada ainda. Faça o upload da planilha ou adicione manualmente.
                         </td>
                       </tr>
+                    ) : (
+                      /* Se a lista tiver dados, o MAP desenha cada linha baseada no Banco de Dados!*/
+                      attendees.map((attendee, index) => (
+                        <tr key={attendee.id || index} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-900">{attendee.luc}</td>
+                          <td className="px-6 py-4 text-gray-600">{attendee.loja}</td>
+                          <td className="px-6 py-4 text-gray-600">{attendee.representante}</td>
+                          <td className="px-6 py-4">
+                            {/* Muda a cor da pilula de acordo com o status */}
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              attendee.status === "PRESENTE" || attendee.status === "Presente"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                              }`}>
+                                {attendee.status}
+                                </span>                            
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button onClick={() => setAttendeeToDelete({ id: attendee.id, nome: attendee.representante })}
+                                    className="text-gray-400 hover:text-red-600 transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                    title="Remover presença"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                            </button>                            
+                          </td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
@@ -636,7 +764,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddAttendee} className="p-6">
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -645,31 +773,31 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
                     id="luc"
                     required
                     value={newAttendee.luc}
-                    onChange={(e) => setNewAttendee({...newAttendee, luc: e.target.value})}
+                    onChange={(e) => setNewAttendee({ ...newAttendee, luc: e.target.value })}
                     placeholder="Ex: LUC-101"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-colors text-sm text-gray-900"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <label htmlFor="loja" className="text-sm font-medium" style={{ color: "#2A1A1A" }}>Nome da Loja</label>
                   <input
                     id="loja"
                     required
                     value={newAttendee.loja}
-                    onChange={(e) => setNewAttendee({...newAttendee, loja: e.target.value})}
+                    onChange={(e) => setNewAttendee({ ...newAttendee, loja: e.target.value })}
                     placeholder="Ex: O Boticário"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-colors text-sm text-gray-900"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <label htmlFor="representante" className="text-sm font-medium" style={{ color: "#2A1A1A" }}>Nome do Representante</label>
                   <input
                     id="representante"
                     required
                     value={newAttendee.representante}
-                    onChange={(e) => setNewAttendee({...newAttendee, representante: e.target.value})}
+                    onChange={(e) => setNewAttendee({ ...newAttendee, representante: e.target.value })}
                     placeholder="Ex: Ana Silva"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-colors text-sm text-gray-900"
                   />
@@ -681,15 +809,15 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
                     id="status"
                     required
                     value={newAttendee.status}
-                    onChange={(e) => setNewAttendee({...newAttendee, status: e.target.value})}
+                    onChange={(e) => setNewAttendee({ ...newAttendee, status: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-colors text-sm text-gray-900 bg-white"
                   >
                     <option value="Presente">Presente</option>
-                    <option value="Não Presente">Não Presente</option>
+                    <option value="Não Presente">Ausente</option>
                   </select>
                 </div>
               </div>
-              
+
               <div className="mt-8 flex items-center justify-end gap-3">
                 <button
                   type="button"
@@ -710,6 +838,32 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
           </div>
         </div>
       )}
+
+      {/* Modal Lindo de Confirmação de Deleção */}
+      <AlertDialog open={!!attendeeToDelete} onOpenChange={(open) => !open && setAttendeeToDelete(null)}>
+        <AlertDialogContent className="bg-white rounded-lg max-w-sm w-full p-6 border border-gray-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+              Remover Participante?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-500 mt-2">
+              Você está prestes a remover a presença de <strong>{attendeeToDelete?.nome}</strong>. Esta ação não poderá ser desfeita no banco de dados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 flex items-center justify-end gap-3">
+            <AlertDialogCancel className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => attendeeToDelete && handleRemoveAttendee(attendeeToDelete.id)}
+              className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90"
+              style={{ backgroundColor: "#D93030" }}
+            >
+              Confirmar e Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
