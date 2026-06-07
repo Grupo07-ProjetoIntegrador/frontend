@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabaseClient";
@@ -13,7 +13,11 @@ import {
   Calendar, 
   GraduationCap, 
   ShieldCheck,
-  IdCard
+  IdCard,
+  Shield,
+  List,
+  Save,
+  MapPin
 } from "lucide-react";
 
 interface ProfileData {
@@ -30,6 +34,164 @@ export function ProfilePage() {
   const [oauthStatus, setOauthStatus] = useState<"connected" | "disconnected" | "unknown">("unknown");
   const [displayName, setDisplayName] = useState("");
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // --- GEOFENCING STATES & REFS ---
+  const [locais, setLocais] = useState<any[]>([]);
+  const [isLoadingLocais, setIsLoadingLocais] = useState(true);
+  const [nomeLocal, setNomeLocal] = useState("");
+  const [latitude, setLatitude] = useState(-16.7090);
+  const [longitude, setLongitude] = useState(-49.2390);
+  const [raioAmplitude, setRaioAmplitude] = useState(150);
+  const [isSavingLocal, setIsSavingLocal] = useState(false);
+
+  const mapRef = useRef<HTMLDivElement>(null);
+  const googleMapInstance = useRef<any>(null);
+  const markerInstance = useRef<any>(null);
+  const circleInstance = useRef<any>(null);
+
+  // Load registered geofencing points
+  const carregarLocais = async () => {
+    try {
+      const res = await fetch("http://localhost:8080/api/locais");
+      if (res.ok) {
+        const data = await res.json();
+        setLocais(data || []);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar locais:", err);
+    } finally {
+      setIsLoadingLocais(false);
+    }
+  };
+
+  // Load Google Maps API script and initialize the map
+  useEffect(() => {
+    if (isLoading) return; // Wait for profile loading
+
+    carregarLocais();
+
+    const loadGoogleMapsScript = (callback: () => void) => {
+      if ((window as any).google && (window as any).google.maps) {
+        callback();
+        return;
+      }
+      const existingScript = document.getElementById("googleMapsScript");
+      if (existingScript) {
+        existingScript.addEventListener("load", callback);
+        return;
+      }
+      const script = document.createElement("script");
+      script.id = "googleMapsScript";
+      script.src = `https://maps.googleapis.com/maps/api/js?v=3.exp`;
+      script.async = true;
+      script.defer = true;
+      script.addEventListener("load", callback);
+      document.body.appendChild(script);
+    };
+
+    loadGoogleMapsScript(() => {
+      if (!mapRef.current) return;
+      const center = { lat: latitude, lng: longitude };
+      
+      const map = new (window as any).google.maps.Map(mapRef.current, {
+        center: center,
+        zoom: 16,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      googleMapInstance.current = map;
+
+      const marker = new (window as any).google.maps.Marker({
+        position: center,
+        map: map,
+        draggable: true,
+        title: "Ponto da Cerca Virtual"
+      });
+      markerInstance.current = marker;
+
+      const circle = new (window as any).google.maps.Circle({
+        map: map,
+        center: center,
+        radius: raioAmplitude,
+        fillColor: "#D93030",
+        fillOpacity: 0.15,
+        strokeColor: "#D93030",
+        strokeOpacity: 0.5,
+        strokeWeight: 2,
+      });
+      circleInstance.current = circle;
+
+      // Click event
+      map.addListener("click", (event: any) => {
+        const clickedLat = event.latLng.lat();
+        const clickedLng = event.latLng.lng();
+        setLatitude(Number(clickedLat.toFixed(6)));
+        setLongitude(Number(clickedLng.toFixed(6)));
+      });
+
+      // Drag event
+      marker.addListener("dragend", () => {
+        const position = marker.getPosition();
+        if (position) {
+          setLatitude(Number(position.lat().toFixed(6)));
+          setLongitude(Number(position.lng().toFixed(6)));
+        }
+      });
+    });
+  }, [isLoading]);
+
+  // Synchronize dynamic coordinates / radius with Google Map
+  useEffect(() => {
+    if (googleMapInstance.current) {
+      const newPos = { lat: latitude, lng: longitude };
+      
+      if (markerInstance.current) {
+        markerInstance.current.setPosition(newPos);
+      }
+      if (circleInstance.current) {
+        circleInstance.current.setCenter(newPos);
+        circleInstance.current.setRadius(raioAmplitude);
+      }
+      googleMapInstance.current.panTo(newPos);
+    }
+  }, [latitude, longitude, raioAmplitude]);
+
+  const handleSaveLocal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nomeLocal) {
+      toast.error("Preencha o nome do local");
+      return;
+    }
+
+    setIsSavingLocal(true);
+    try {
+      const response = await fetch("http://localhost:8080/api/locais/cadastrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome_local: nomeLocal,
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          raio_amplitude: Number(raioAmplitude),
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("Local de Geofencing cadastrado com sucesso!");
+        setNomeLocal("");
+        carregarLocais();
+      } else {
+        const errData = await response.json();
+        toast.error(errData.erro || "Erro ao salvar local.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro na comunicação com o backend.");
+    } finally {
+      setIsSavingLocal(false);
+    }
+  };
 
   const connectUrl = useMemo(() => {
     if (!profile) return "";
@@ -424,6 +586,157 @@ export function ProfilePage() {
 
           </div>
         </div>
+
+        {/* ===== GEOFENCING SECTION ===== */}
+        <div className="w-full">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 rounded-lg bg-[#8B1A1A]/10 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-[#8B1A1A]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900 tracking-tight">Cercas Virtuais (Geofencing)</h2>
+              <p className="text-xs text-gray-500">Defina pontos geográficos reais para validar o autocheck-in dos lojistas.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Form Column */}
+            <div className="lg:col-span-4 space-y-5">
+              <form onSubmit={handleSaveLocal} className="bg-white border border-gray-200/80 rounded-2xl shadow-sm p-6 space-y-5">
+                <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3">Novo Ponto de Cerca</h3>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">
+                    Nome do Local
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Auditório Principal, Entrada A..."
+                    value={nomeLocal}
+                    onChange={(e) => setNomeLocal(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50/50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/20 focus:border-[#8B1A1A] transition-all"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={latitude}
+                      onChange={(e) => setLatitude(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-xl bg-gray-50/50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/20 focus:border-[#8B1A1A] font-mono transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={longitude}
+                      onChange={(e) => setLongitude(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-xl bg-gray-50/50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/20 focus:border-[#8B1A1A] font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide">Raio da Cerca</label>
+                    <span className="text-xs font-bold text-[#8B1A1A] bg-red-50 px-2 py-0.5 rounded-full">{raioAmplitude}m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="1000"
+                    step="10"
+                    value={raioAmplitude}
+                    onChange={(e) => setRaioAmplitude(Number(e.target.value))}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#8B1A1A]"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                    <span>10m</span>
+                    <span>500m</span>
+                    <span>1000m</span>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                  <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+                    💡 <strong>Dica:</strong> Clique no mapa ao lado para posicionar o ponto automaticamente. Você também pode arrastar o marcador.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingLocal}
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl text-white bg-[#8B1A1A] hover:bg-[#7A1414] transition-all shadow-sm active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingLocal ? "Salvando..." : "Salvar Cerca Virtual"}
+                </button>
+              </form>
+
+              {/* Registered locations list */}
+              <div className="bg-white border border-gray-200/80 rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                  <List className="w-4 h-4 text-gray-400" />
+                  <h3 className="text-sm font-bold text-gray-800">
+                    Locais Cadastrados {!isLoadingLocais && <span className="text-gray-400 font-normal">({locais.length})</span>}
+                  </h3>
+                </div>
+                <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
+                  {isLoadingLocais ? (
+                    <div className="p-5 text-center text-sm text-gray-400">Carregando locais...</div>
+                  ) : locais.length === 0 ? (
+                    <div className="p-5 text-center text-sm text-gray-400">Nenhum local cadastrado.</div>
+                  ) : (
+                    locais.map((loc: any) => (
+                      <div
+                        key={loc.id}
+                        onClick={() => { setLatitude(loc.latitude); setLongitude(loc.longitude); setRaioAmplitude(loc.raio_amplitude); }}
+                        className="px-5 py-3.5 flex justify-between items-start hover:bg-gray-50 transition-colors cursor-pointer group"
+                      >
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-3 h-3 text-[#8B1A1A] shrink-0" />
+                            <p className="text-sm font-semibold text-gray-900 group-hover:text-[#8B1A1A] transition-colors">{loc.nome_local}</p>
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-0.5 font-mono pl-4">{loc.latitude}, {loc.longitude}</p>
+                        </div>
+                        <span className="text-[11px] font-bold text-[#8B1A1A] bg-red-50 border border-red-100 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                          {loc.raio_amplitude}m
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Google Maps Column */}
+            <div className="lg:col-span-8">
+              <div className="bg-white border border-gray-200/80 rounded-2xl shadow-sm overflow-hidden" style={{ height: "520px" }}>
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">Mapa Geográfico Real</p>
+                    <p className="text-xs text-gray-500">Clique para definir coordenadas · Arraste o marcador para ajustar</p>
+                  </div>
+                  <div className="text-[11px] font-mono text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-lg">
+                    {latitude.toFixed(5)}, {longitude.toFixed(5)}
+                  </div>
+                </div>
+                <div
+                  ref={mapRef}
+                  style={{ width: "100%", height: "calc(100% - 57px)" }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* ===== END GEOFENCING SECTION ===== */}
 
       </div>
     </div>
