@@ -1,4 +1,7 @@
-import { ArrowLeft, Calendar, Building, Store, TrendingUp, TrendingDown, Users, Award, ExternalLink, BookOpen } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "../lib/supabaseClient";
+import { ArrowLeft, Calendar, Building, Store, TrendingUp, TrendingDown, Users, Award, ExternalLink, BookOpen, Download, Loader2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
@@ -18,6 +21,50 @@ export interface StoreDetailsProps {
 }
 
 export function StoreDetails({ store, trainings, onBack, onSelectTraining }: StoreDetailsProps) {
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportPDF = async () => {
+    if (!dataInicio || !dataFim) {
+      toast.error("Por favor, preencha ambas as datas para o período.");
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const sessionRes = await supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token || "";
+
+      const url = `http://localhost:8080/api/relatorios/loja/dossie?loja_id=${store.id}&data_inicio=${dataInicio}&data_fim=${dataFim}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao gerar PDF.");
+      }
+
+      const blob = await response.blob();
+      const localUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = localUrl;
+      a.download = `dossie_${store.name.replace(/\s+/g, "_").toLowerCase()}_${dataInicio}_${dataFim}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(localUrl);
+      toast.success("Dossiê em PDF baixado com sucesso!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao exportar o PDF do dossiê.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const attendanceMap = new Map();
   trainings.forEach(t => {
     if (t.attendanceList) {
@@ -56,7 +103,7 @@ export function StoreDetails({ store, trainings, onBack, onSelectTraining }: Sto
           Voltar para gestão
         </button>
 
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-4 mb-2">
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-red-100" style={{ backgroundColor: "#C4151F" }}>
@@ -74,7 +121,49 @@ export function StoreDetails({ store, trainings, onBack, onSelectTraining }: Sto
               </div>
             </div>
           </div>
+
+          {/* Date Range Selector and Export PDF Button */}
+          <div className="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pdf-start-date" className="text-xs font-semibold text-gray-600 uppercase tracking-wider">De</label>
+              <input
+                id="pdf-start-date"
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-all bg-white"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pdf-end-date" className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Até</label>
+              <input
+                id="pdf-end-date"
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-all bg-white"
+              />
+            </div>
+            <button
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all bg-[#C4151F] hover:bg-[#A31219] disabled:opacity-50 min-h-[40px] cursor-pointer"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Exportar Dossiê PDF
+                </>
+              )}
+            </button>
+          </div>
         </div>
+
       </div>
 
       {/* Content */}
