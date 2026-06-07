@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle2, User, Building, Calendar, BookOpen, UserPlus, Trash2, X, XCircle, Users, CheckSquare, Store, Link, Copy, Settings2, Edit2, Plus } from "lucide-react";
+import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle2, User, Building, Calendar, BookOpen, UserPlus, Trash2, X, XCircle, Users, CheckSquare, Store, Link, Copy, Settings2, Edit2, Plus, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
@@ -42,7 +42,44 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
 
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null); 
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const sessionRes = await supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token || "";
+
+      const url = `http://localhost:8080/api/relatorios/treinamento/chamada?treinamento_id=${training.id}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao gerar PDF.");
+      }
+
+      const blob = await response.blob();
+      const localUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = localUrl;
+      a.download = `lista_chamada_${training.tema.replace(/\s+/g, "_").toLowerCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(localUrl);
+      toast.success("Lista de chamada em PDF baixada com sucesso!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao exportar a lista de chamada em PDF.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
   const [attendees, setAttendees] = useState<{ id: number; luc: string; loja: string; representante: string; status: string }[]>([]);
   const [attendeeToDelete, setAttendeeToDelete] = useState<{ id: string | number; nome: string } | null>(null);
   const [formLinks, setFormLinks] = useState({ view: "", edit: "" });
@@ -488,6 +525,24 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
             </div>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors min-h-[44px]"
+              title="Exportar Lista de Chamada em PDF"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="hidden sm:inline">Gerando...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exportar PDF</span>
+                </>
+              )}
+            </button>
             <button
               onClick={onOpenSettings}
               className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
