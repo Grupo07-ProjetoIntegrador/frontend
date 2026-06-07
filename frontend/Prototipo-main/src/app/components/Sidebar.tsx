@@ -15,6 +15,7 @@ import {
   BarChart2,
   ChevronLeft,
   LogOut,
+  MapPin,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -116,11 +117,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.path ? location.pathname === item.path : false;
-            const className = `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer text-left ${
-              isActive
-                ? "bg-white/15 text-white"
-                : "text-white/70 hover:bg-white/10 hover:text-white"
-            }`;
+            const className = `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer text-left ${isActive
+              ? "bg-white/15 text-white"
+              : "text-white/70 hover:bg-white/10 hover:text-white"
+              }`;
 
             if (item.path) {
               return (

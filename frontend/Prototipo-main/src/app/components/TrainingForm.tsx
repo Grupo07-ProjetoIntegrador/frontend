@@ -675,7 +675,7 @@
 
 
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -703,6 +703,7 @@ interface FormValues {
   status: string;
   capacidadeMaxima: string;
   local: string;
+  local_id?: string;
   modalidade: string;
   conteudo: string;
   objetivo: string;
@@ -737,6 +738,7 @@ const toApiPayload = (data: FormValues) => ({
   horario_inicio: data.horarioInicio || "00:00",
   horario_fim: data.horarioFim || data.horarioInicio || "00:00",
   local: data.local || "",
+  local_id: data.local_id || "",
   modalidade: "Presencial", // Forçado sempre como Presencial para o backend
   conteudo: data.conteudo,
   capacidade_maxima: Number(data.capacidadeMaxima) || 0,
@@ -816,6 +818,22 @@ export function TrainingForm({ onBack, onSuccess, initialData }: TrainingFormPro
 
   const isRecorrente = watch("recorrente");
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [locaisList, setLocaisList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchLocais = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/locais`);
+        if (res.ok) {
+          const data = await res.json();
+          setLocaisList(data || []);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar locais:", err);
+      }
+    };
+    fetchLocais();
+  }, []);
   
   const isEditing = !!initialData;
 
@@ -1061,19 +1079,39 @@ export function TrainingForm({ onBack, onSuccess, initialData }: TrainingFormPro
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Local
+                  Local / Cerca Virtual <span style={{ color: "#D93030" }}>*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <MapPin className="h-4 w-4 text-gray-400" />
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Ex.: Sala de Reuniões 1, Auditório..."
-                    {...register("local")}
-                    className={`pl-10 pr-3 ${inputBase}`}
-                  />
+                  <select
+                    {...register("local_id", {
+                      required: "Selecione um local",
+                      onChange: (e) => {
+                        const selected = locaisList.find(l => l.id === e.target.value);
+                        if (selected) {
+                          setValue("local", selected.nome_local);
+                        } else {
+                          setValue("local", "");
+                        }
+                      }
+                    })}
+                    className={`pl-10 pr-3 ${errors.local_id ? "border-red-500 focus:ring-red-500" : ""} ${inputBase}`}
+                  >
+                    <option value="">Selecione um Local de Geofencing</option>
+                    {locaisList.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.nome_local} (Raio: {loc.raio_amplitude}m)
+                      </option>
+                    ))}
+                  </select>
                 </div>
+                {errors.local_id && (
+                  <p className="mt-1.5 text-xs flex items-center" style={{ color: "#D93030" }}>
+                    <Info className="w-3.5 h-3.5 mr-1" /> {errors.local_id.message}
+                  </p>
+                )}
               </div>
 
               <div>
