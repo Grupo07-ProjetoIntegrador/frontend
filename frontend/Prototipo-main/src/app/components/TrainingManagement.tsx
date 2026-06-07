@@ -296,12 +296,28 @@ export function TrainingManagement() {
   const [mesFim, setMesFim] = useState<string>("12");
   const [dataInicioCustom, setDataInicioCustom] = useState<string>("");
   const [dataFimCustom, setDataFimCustom] = useState<string>("");
+  // Estados para controlar a folha de visualização de cada calendário de forma independente
   const [currentMonthInicio, setCurrentMonthInicio] = useState<Date>(
     new Date(anoSelecionado, new Date().getMonth(), 1),
   );
+
   const [currentMonthFim, setCurrentMonthFim] = useState<Date>(
     new Date(anoSelecionado, new Date().getMonth(), 1),
   );
+
+  // EFEITO 1: Atualiza a folha do calendário se o usuário mudar o ano no seletor principal
+  useEffect(() => {
+    setCurrentMonthInicio(
+      new Date(anoSelecionado, currentMonthInicio.getMonth(), 1),
+    );
+    setCurrentMonthFim(new Date(anoSelecionado, currentMonthFim.getMonth(), 1));
+  }, [anoSelecionado]);
+
+  // EFEITO 2: Reset automático das datas customizadas ao trocar o tipo de filtro
+  useEffect(() => {
+    setDataInicioCustom("");
+    setDataFimCustom("");
+  }, [tipoFiltro]);
 
   // Atualiza a folha do calendário se o usuário mudar o ano no seletor principal
   useEffect(() => {

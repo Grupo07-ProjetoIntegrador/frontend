@@ -151,6 +151,16 @@ export function DatePickerPremium({
             );
           })}
         </div>
+        {/* Linha divisória e Botão para Resetar a Data Manualmente */}
+        <div className="mt-3 pt-2 border-t border-gray-100 flex justify-end">
+          <button
+            type="button"
+            onClick={() => onChange("")} // Envia string vazia para limpar o estado
+            className="text-xs font-semibold text-gray-400 hover:text-[#D93030] transition-colors px-2 py-1 rounded"
+          >
+            Limpar Data
+          </button>
+        </div>
       </div>
     );
   };
