@@ -107,9 +107,21 @@ type ApiTraining = {
   data?: string;
   data_hora?: string;
   horario_inicio?: string;
+  horario_fim?: string;
   conteudo?: string;
   status?: string;
   capacidade_maxima?: number;
+  descricao?: string;
+  categoria?: string;
+  local?: string;
+  modalidade?: string;
+  objetivo?: string;
+  observacoes?: string;
+  material_apoio?: string;
+  responsavel?: string;
+  area_responsavel?: string;
+  tags?: string;
+  recorrente?: boolean;
 };
 
 // Cria o componente que estava faltando para o compilador
@@ -148,19 +160,38 @@ const formatTrainingDate = (dateTime?: string, fallback = "") => {
 const normalizeTrainingFromApi = (training: ApiTraining) => {
   const dataHora = training.data_hora || "";
   const status = (training.status || "").toLowerCase();
+  const horarioInicio =
+    training.horario_inicio ||
+    (dataHora ? format(new Date(dataHora), "HH:mm") : "00:00");
 
   return {
     id: training.id,
     tema: training.tema,
+    descricao: training.descricao || "",
+    categoria: training.categoria || "Geral",
     segmento: training.segmento || "Geral",
     data: formatTrainingDate(dataHora, training.data || ""),
-    hora:
-      training.horario_inicio ||
-      (dataHora ? format(new Date(dataHora), "HH:mm") : "00:00"),
+    hora: horarioInicio,
+    horarioInicio,
+    horarioFim: training.horario_fim || "",
     dataHora: dataHora || new Date().toISOString(),
+    local: training.local || "",
+    modalidade: training.modalidade || "Presencial",
     conteudo: training.conteudo || "",
+    objetivo: training.objetivo || "",
+    observacoes: training.observacoes || "",
+    materialApoio: training.material_apoio || "",
+    responsavel: training.responsavel || "",
+    areaResponsavel: training.area_responsavel || "",
+    tags: training.tags || "",
+    recorrente: !!training.recorrente,
     isCancelado: status === "cancelado",
+    status: status || "agendado",
     capacidade_maxima: training.capacidade_maxima,
+    capacidadeMaxima:
+      training.capacidade_maxima !== undefined
+        ? String(training.capacidade_maxima)
+        : "",
     attendanceList: [],
   };
 };
@@ -1641,14 +1672,6 @@ export function TrainingManagement() {
                       {(dashboardData?.topEngajamento ?? []).length > 0 ? (
                         (dashboardData?.topEngajamento ?? []).map(
                           (loja: any, i: number) => {
-                            const porcentagem =
-                              dashboardData?.totalParticipacoes > 0
-                                ? Math.round(
-                                    (loja.total /
-                                      dashboardData.totalParticipacoes) *
-                                      100,
-                                  )
-                                : 0;
                             return (
                               <div
                                 key={i}
@@ -1665,21 +1688,10 @@ export function TrainingManagement() {
                                     <span className="text-xs text-slate-500">
                                       {loja.total}{" "}
                                       {loja.total === 1
-                                        ? "presença"
-                                        : "presenças"}{" "}
+                                        ? "treinamento"
+                                        : "treinamentos"}{" "}
                                       no período
                                     </span>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 w-24">
-                                  <span className="text-sm font-bold text-emerald-600">
-                                    {porcentagem}%
-                                  </span>
-                                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                    <div
-                                      className="h-full bg-emerald-500 rounded-full"
-                                      style={{ width: `${porcentagem}%` }}
-                                    />
                                   </div>
                                 </div>
                               </div>
