@@ -112,10 +112,8 @@ type ApiTraining = {
   capacidade_maxima?: number;
 };
 
-// Cria o componente que estava faltando para o compilador
 const PopoverClose = PopoverPrimitive.Close;
 
-// Array para montar a grid de meses
 const mesesGrid = [
   { cod: "01", abrev: "Jan", nome: "Janeiro" },
   { cod: "02", abrev: "Fev", nome: "Fevereiro" },
@@ -131,7 +129,6 @@ const mesesGrid = [
   { cod: "12", abrev: "Dez", nome: "Dezembro" },
 ];
 
-// Gera uma lista dinâmica dos últimos 9 anos a partir do ano atual para a matriz 3x3
 const anoAtual = new Date().getFullYear();
 const anosDisponiveis = Array.from(
   { length: 9 },
@@ -231,36 +228,6 @@ const mockStoreData = [
   },
 ];
 
-const generateVariedAttendance = (trainingId: number, tema: string) => {
-  return mockStoreData.map((store) => {
-    let status = "Presente";
-
-    if (
-      store.name === "Riachuelo" &&
-      tema === "Inovações Tecnológicas em Vendas"
-    ) {
-      status = "Ausente";
-    } else if (
-      store.name === "Centauro" &&
-      tema === "Inovações Tecnológicas em Vendas"
-    ) {
-      status = "Ausente";
-    } else if ((trainingId + store.id) % 4 === 0) {
-      status = "Ausente";
-    } else if ((trainingId * store.id) % 7 === 0) {
-      status = "Ausente";
-    }
-
-    return {
-      id: store.id,
-      luc: store.luc,
-      loja: store.name,
-      representante: store.manager,
-      status: status,
-    };
-  });
-};
-
 export function TrainingManagement() {
   const [trainingsList, setTrainingsList] = useState<any[]>([]);
   const [isLoadingTrainings, setIsLoadingTrainings] = useState(true);
@@ -284,9 +251,7 @@ export function TrainingManagement() {
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
   const [lucSearchQuery, setLucSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [dashboardPeriod, setDashboardPeriod] = useState("ano");
   const itemsPerPage = 10;
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   const [tipoFiltro, setTipoFiltro] = useState<string>("ano");
@@ -296,11 +261,10 @@ export function TrainingManagement() {
   const [mesFim, setMesFim] = useState<string>("12");
   const [dataInicioCustom, setDataInicioCustom] = useState<string>("");
   const [dataFimCustom, setDataFimCustom] = useState<string>("");
-  // Estados para controlar a folha de visualização de cada calendário de forma independente
+
   const [currentMonthInicio, setCurrentMonthInicio] = useState<Date>(
     new Date(anoSelecionado, new Date().getMonth(), 1),
   );
-
   const [currentMonthFim, setCurrentMonthFim] = useState<Date>(
     new Date(anoSelecionado, new Date().getMonth(), 1),
   );
@@ -319,27 +283,56 @@ export function TrainingManagement() {
     setDataFimCustom("");
   }, [tipoFiltro]);
 
-  // Atualiza a folha do calendário se o usuário mudar o ano no seletor principal
-  useEffect(() => {
-    setCurrentMonthInicio(
-      new Date(anoSelecionado, currentMonthInicio.getMonth(), 1),
-    );
-    setCurrentMonthFim(new Date(anoSelecionado, currentMonthFim.getMonth(), 1));
-  }, [anoSelecionado]);
+  // Função dinâmica para carregar e atualizar o Dashboard com base nos filtros
+  const carregarDadosDashboard = async () => {
+    let dataInicio = "2026-01-01";
+    let dataFim = "2026-12-31";
 
+    if (tipoFiltro === "ano") {
+      dataInicio = `${anoSelecionado}-01-01`;
+      dataFim = `${anoSelecionado}-12-31`;
+    } else if (tipoFiltro === "mes") {
+      dataInicio = `${anoSelecionado}-${mesSelecionado}-01`;
+      dataFim = `${anoSelecionado}-${mesSelecionado}-31`;
+    } else if (tipoFiltro === "periodo_mes") {
+      dataInicio = `${anoSelecionado}-${mesInicio}-01`;
+      dataFim = `${anoSelecionado}-${mesFim}-31`;
+    } else if (tipoFiltro === "personalizado" || tipoFiltro === "dia") {
+      if (!dataInicioCustom) return; // Aguarda a seleção da data customizada
+      dataInicio = dataInicioCustom;
+      dataFim =
+        tipoFiltro === "dia"
+          ? dataInicioCustom
+          : dataFimCustom || dataInicioCustom;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/treinamentos/dashboard?data_inicio=${dataInicio}&data_fim=${dataFim}`,
+      );
+      const data = await response.json();
+      setDashboardData(data);
+    } catch (error) {
+      console.error("Erro ao carregar dashboard do backend Go:", error);
+    }
+  };
+
+  // Dispara a busca do dashboard sempre que qualquer dependência de filtragem for alterada
   useEffect(() => {
-    fetch(
-      `http://localhost:8080/api/treinamentos/dashboard?periodo=${dashboardPeriod}`,
-    )
-      .then((res) => res.json())
-      .then((data) => setDashboardData(data))
-      .catch((err) => console.error("Erro ao carregar o dashboard:", err));
-  }, [dashboardPeriod]);
+    carregarDadosDashboard();
+  }, [
+    tipoFiltro,
+    anoSelecionado,
+    mesSelecionado,
+    mesInicio,
+    mesFim,
+    dataInicioCustom,
+    dataFimCustom,
+  ]);
 
   const carregarTreinamentos = async () => {
     setIsLoadingTrainings(true);
     setTrainingsError("");
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/treinamentos`);
       if (!response.ok) throw new Error("Erro ao buscar treinamentos");
@@ -360,143 +353,15 @@ export function TrainingManagement() {
     carregarTreinamentos();
   }, []);
 
-  const aplicarFiltroDashboard = async () => {
-    let dataInicio = "2026-01-01";
-    let dataFim = "2026-12-31";
-
-    if (tipoFiltro === "ano") {
-      dataInicio = `${anoSelecionado}-01-01`;
-      dataFim = `${anoSelecionado}-12-31`;
-    } else if (tipoFiltro === "mes") {
-      dataInicio = `${anoSelecionado}-${mesSelecionado}-01`;
-      dataFim = `${anoSelecionado}-${mesSelecionado}-31`;
-    } else if (tipoFiltro === "periodo_mes") {
-      dataInicio = `${anoSelecionado}-${mesInicio}-01`;
-      dataFim = `${anoSelecionado}-${mesFim}-31`;
-    } else if (tipoFiltro === "personalizado" || tipoFiltro === "dia") {
-      dataInicio = dataInicioCustom;
-      dataFim = tipoFiltro === "dia" ? dataInicioCustom : dataFimCustom;
-    }
-
-    if (
-      (tipoFiltro === "personalizado" || tipoFiltro === "dia") &&
-      !dataInicio
-    ) {
-      alert("Por favor, selecione a(s) data(s).");
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `http://localhost:8080/api/treinamentos/dashboard?data_inicio=${dataInicio}&data_fim=${dataFim}`,
-      );
-      const data = await response.json();
-      setDashboardData(data);
-    } catch (error) {
-      console.error("Erro ao filtrar dashboard:", error);
-    }
-  };
-
-  const now = new Date();
-  let startDate = new Date(2000, 0, 1);
-  let endDate = new Date(2100, 0, 1);
-
-  if (dashboardPeriod === "mes") {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-  } else if (dashboardPeriod === "trimestre") {
-    startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-  } else if (dashboardPeriod === "ano") {
-    startDate = new Date(now.getFullYear(), 0, 1);
-    endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-  }
-
-  const pastTrainings = trainingsList.filter((t) => {
-    const d = new Date(t.dataHora);
-    return d < now && !t.isCancelado;
-  });
-
-  const periodTrainings = pastTrainings.filter((t) => {
-    const d = new Date(t.dataHora);
-    return d >= startDate && d <= endDate;
-  });
-
-  let totalInscritos = 0;
-  let totalPresentes = 0;
-  const storesImpacted = new Set();
-
-  periodTrainings.forEach((t) => {
-    if (t.attendanceList) {
-      t.attendanceList.forEach((record: any) => {
-        totalInscritos++;
-        if (record.status === "Presente") {
-          totalPresentes++;
-          storesImpacted.add(record.id);
-        }
-      });
-    }
-  });
-
-  const monthsMap: Record<number, string> = {
-    0: "Jan",
-    1: "Fev",
-    2: "Mar",
-    3: "Abr",
-    4: "Mai",
-    5: "Jun",
-    6: "Jul",
-    7: "Ago",
-    8: "Set",
-    9: "Out",
-    10: "Nov",
-    11: "Dez",
-  };
-
-  const chartDataDynamic = [];
-  const startYearMonth = startDate.getFullYear() * 12 + startDate.getMonth();
-  const endYearMonth =
-    endDate.getFullYear() * 12 +
-    (dashboardPeriod === "ano" ? now.getMonth() : endDate.getMonth());
-
-  for (let ym = startYearMonth; ym <= endYearMonth; ym++) {
-    const y = Math.floor(ym / 12);
-    const m = ym % 12;
-
-    const monthTrainings = periodTrainings.filter((t) => {
-      const d = new Date(t.dataHora);
-      return d.getMonth() === m && d.getFullYear() === y;
-    });
-
-    let mInscritos = 0;
-    let mPresentes = 0;
-
-    monthTrainings.forEach((t) => {
-      if (t.attendanceList) {
-        t.attendanceList.forEach((record: any) => {
-          mInscritos++;
-          if (record.status === "Presente") mPresentes++;
-        });
-      }
-    });
-
-    if (
-      dashboardPeriod === "ano" ||
-      mInscritos > 0 ||
-      dashboardPeriod !== "ano"
-    ) {
-      chartDataDynamic.push({
-        name: monthsMap[m],
-        inscritos: mInscritos,
-        presentes: mPresentes,
-        monthIndex: m,
-        year: y,
-      });
-    }
-  }
-
+  // 🚀 ADICIONE ESTE BLOCO DE VOLTA AQUI PARA RESOLVER O ERRO:
   const storeExplorerData = mockStoreData.map((store) => {
-    const periodAttendance = periodTrainings
+    // Como os treinamentos vêm do back, filtramos os que já aconteceram para calcular a participação
+    const pastTrainings = trainingsList.filter((t) => {
+      const d = new Date(t.dataHora);
+      return d < new Date() && !t.isCancelado;
+    });
+
+    const periodAttendance = pastTrainings
       .map((t) => t.attendanceList?.find((a: any) => a.id === store.id))
       .filter(Boolean) as any[];
 
@@ -508,6 +373,8 @@ export function TrainingManagement() {
 
     return { ...store, totalTrainings: total, participation };
   });
+
+  const now = new Date();
 
   const filteredTrainings = trainingsList.filter((row) => {
     if (activeFilter === "data") {
@@ -580,9 +447,7 @@ export function TrainingManagement() {
       try {
         const response = await fetch(
           `${API_BASE_URL}/api/treinamentos/deletar?id=${trainingToDelete.id}`,
-          {
-            method: "DELETE",
-          },
+          { method: "DELETE" },
         );
         if (response.ok) {
           setTrainingsList((prev) =>
@@ -741,7 +606,7 @@ export function TrainingManagement() {
     return (
       <StoreDetails
         store={selectedStore}
-        trainings={periodTrainings}
+        trainings={trainingsList}
         onBack={() => {
           setSelectedStore(null);
           setActiveTab("dashboard");
@@ -993,26 +858,22 @@ export function TrainingManagement() {
                           <tr>
                             <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                               <div className="flex items-center justify-center gap-1.5">
-                                <Tag className="w-3 h-3" />
-                                Tema
+                                <Tag className="w-3 h-3" /> Tema
                               </div>
                             </th>
                             <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                               <div className="flex items-center justify-center gap-1.5">
-                                <Filter className="w-3 h-3" />
-                                Segmento
+                                <Filter className="w-3 h-3" /> Segmento
                               </div>
                             </th>
                             <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                               <div className="flex items-center justify-center gap-1.5">
-                                <Calendar className="w-3 h-3" />
-                                Data
+                                <Calendar className="w-3 h-3" /> Data
                               </div>
                             </th>
                             <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                               <div className="flex items-center justify-center gap-1.5">
-                                <BookOpen className="w-3 h-3" />
-                                Conteúdo
+                                <BookOpen className="w-3 h-3" /> Conteúdo
                               </div>
                             </th>
                             <th className="text-center px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -1073,8 +934,8 @@ export function TrainingManagement() {
                                   onClick={() => setSelectedTraining(row)}
                                 >
                                   <span className="inline-flex items-center justify-center gap-1.5 text-sm text-gray-600 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors">
-                                    <Calendar className="w-3 h-3" />
-                                    {row.data} às {row.hora}
+                                    <Calendar className="w-3 h-3" /> {row.data}{" "}
+                                    às {row.hora}
                                   </span>
                                 </td>
                                 <td
@@ -1218,7 +1079,7 @@ export function TrainingManagement() {
                             </div>
                             <div className="space-y-1.5 mt-2">
                               <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                <Calendar className="w-3.5 h-3.5 text-gray-400" />{" "}
                                 {row.data} às {row.hora}
                               </div>
                               <div className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -1286,7 +1147,7 @@ export function TrainingManagement() {
             </div>
           </TabsContent>
 
-          {/*PARTE DE FILTRAGEM DO DASHBOARD */}
+          {/* PARTE DE FILTRAGEM DO DASHBOARD */}
           <TabsContent
             value="dashboard"
             className="flex-1 flex flex-col m-0 p-0 outline-none data-[state=active]:flex pt-4"
@@ -1459,6 +1320,7 @@ export function TrainingManagement() {
                       </div>
                     </>
                   )}
+
                   {/* 5. INPUTS EM POPOVER COM VISÃO PREMIUM POR ZOOM OUT (ANO -> MÊS -> DIA) */}
                   {(tipoFiltro === "dia" || tipoFiltro === "personalizado") && (
                     <div className="flex flex-col gap-1.5 w-full sm:w-[170px]">
@@ -1485,7 +1347,6 @@ export function TrainingManagement() {
                           className="w-auto p-0 bg-white border border-gray-200 rounded-xl shadow-xl z-50"
                           align="start"
                         >
-                          {/* USANDO O NOVO COMPONENTE PREMIUM DESENVOLVIDO */}
                           <DatePickerPremium
                             value={dataInicioCustom}
                             onChange={(newDate) => setDataInicioCustom(newDate)}
@@ -1518,7 +1379,6 @@ export function TrainingManagement() {
                           className="w-auto p-0 bg-white border border-gray-200 rounded-xl shadow-xl z-50"
                           align="start"
                         >
-                          {/* USANDO O NOVO COMPONENTE PREMIUM DESENVOLVIDO */}
                           <DatePickerPremium
                             value={dataFimCustom}
                             onChange={(newDate) => setDataFimCustom(newDate)}
@@ -1527,13 +1387,6 @@ export function TrainingManagement() {
                       </Popover>
                     </div>
                   )}
-
-                  <button
-                    onClick={aplicarFiltroDashboard}
-                    className="w-full sm:w-auto bg-[#D93030] hover:bg-red-700 text-white font-medium text-sm px-5 h-9 rounded-md transition-colors shadow-sm sm:ml-auto"
-                  >
-                    Filtrar
-                  </button>
                 </div>
               </div>
 
@@ -1750,39 +1603,17 @@ export function TrainingManagement() {
                 </CardHeader>
                 <CardContent>
                   <div className="h-[300px] w-full mt-4">
-                    {chartDataDynamic.length > 0 ? (
+                    {/* MODIFICADO: Valida e exibe os dados reais do Go */}
+                    {(dashboardData?.evolucaoMensal ?? []).length > 0 ? (
                       <ResponsiveContainer
-                        key={`rc-${dashboardPeriod}`}
+                        key={`rc-${tipoFiltro}-${anoSelecionado}`}
                         width="100%"
                         height="100%"
                       >
                         <BarChart
                           id="participation-chart"
-                          data={chartDataDynamic}
+                          data={dashboardData.evolucaoMensal}
                           margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                          onClick={(data) => {
-                            if (
-                              data?.activePayload &&
-                              data.activePayload.length > 0
-                            ) {
-                              const clickedData = data.activePayload[0].payload;
-                              if (
-                                clickedData.monthIndex !== undefined &&
-                                clickedData.year !== undefined
-                              ) {
-                                setCalendarMonth(
-                                  new Date(
-                                    clickedData.year,
-                                    clickedData.monthIndex,
-                                    1,
-                                  ),
-                                );
-                                setViewMode("calendar");
-                                setActiveTab("list");
-                              }
-                            }
-                          }}
-                          style={{ cursor: "pointer" }}
                         >
                           <CartesianGrid
                             key="grid"
@@ -1970,7 +1801,7 @@ export function TrainingManagement() {
           </TabsContent>
         </Tabs>
 
-        {/* Delete Confirmation Modal (Alinhado com a árvore do JSX) */}
+        {/* Delete Confirmation Modal */}
         {trainingToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 overflow-hidden">
