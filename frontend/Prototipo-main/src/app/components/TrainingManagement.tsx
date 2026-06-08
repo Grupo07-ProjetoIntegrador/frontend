@@ -30,6 +30,7 @@ import { TrainingForm } from "./TrainingForm";
 import { TrainingDetails } from "./TrainingDetails";
 import { TrainingSettings } from "./TrainingSettings";
 import { StoreDetails } from "./StoreDetails";
+import { StoreExplorer, LojaExplorador } from "./StoreExplorer";
 
 import {
   Popover,
@@ -280,7 +281,7 @@ export function TrainingManagement() {
   const [selectedTrainingSettings, setSelectedTrainingSettings] =
     useState<any>(null);
   const [trainingToDelete, setTrainingToDelete] = useState<any>(null);
-  const [selectedStore, setSelectedStore] = useState<any>(null);
+  const [selectedStore, setSelectedStore] = useState<LojaExplorador | null>(null);
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
   const [lucSearchQuery, setLucSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -360,27 +361,33 @@ export function TrainingManagement() {
     carregarTreinamentos();
   }, []);
 
-  const aplicarFiltroDashboard = async () => {
-    let dataInicio = "2026-01-01";
-    let dataFim = "2026-12-31";
+  // ─── Derivação reativa do período selecionado (usado pelo dashboard E pelo StoreExplorer) ───
+  // Sempre reflete os controles de filtro sem precisar clicar em "Filtrar".
+  const periodoDataInicio: string = (() => {
+    if (tipoFiltro === "ano") return `${anoSelecionado}-01-01`;
+    if (tipoFiltro === "mes") return `${anoSelecionado}-${mesSelecionado}-01`;
+    if (tipoFiltro === "periodo_mes") return `${anoSelecionado}-${mesInicio}-01`;
+    if (tipoFiltro === "personalizado" || tipoFiltro === "dia")
+      return dataInicioCustom || `${anoSelecionado}-01-01`;
+    return `${anoSelecionado}-01-01`;
+  })();
 
-    if (tipoFiltro === "ano") {
-      dataInicio = `${anoSelecionado}-01-01`;
-      dataFim = `${anoSelecionado}-12-31`;
-    } else if (tipoFiltro === "mes") {
-      dataInicio = `${anoSelecionado}-${mesSelecionado}-01`;
-      dataFim = `${anoSelecionado}-${mesSelecionado}-31`;
-    } else if (tipoFiltro === "periodo_mes") {
-      dataInicio = `${anoSelecionado}-${mesInicio}-01`;
-      dataFim = `${anoSelecionado}-${mesFim}-31`;
-    } else if (tipoFiltro === "personalizado" || tipoFiltro === "dia") {
-      dataInicio = dataInicioCustom;
-      dataFim = tipoFiltro === "dia" ? dataInicioCustom : dataFimCustom;
-    }
+  const periodoDataFim: string = (() => {
+    if (tipoFiltro === "ano") return `${anoSelecionado}-12-31`;
+    if (tipoFiltro === "mes") return `${anoSelecionado}-${mesSelecionado}-31`;
+    if (tipoFiltro === "periodo_mes") return `${anoSelecionado}-${mesFim}-31`;
+    if (tipoFiltro === "dia") return dataInicioCustom || `${anoSelecionado}-12-31`;
+    if (tipoFiltro === "personalizado") return dataFimCustom || `${anoSelecionado}-12-31`;
+    return `${anoSelecionado}-12-31`;
+  })();
+
+  const aplicarFiltroDashboard = async () => {
+    const dataInicio = periodoDataInicio;
+    const dataFim = periodoDataFim;
 
     if (
       (tipoFiltro === "personalizado" || tipoFiltro === "dia") &&
-      !dataInicio
+      !dataInicioCustom
     ) {
       alert("Por favor, selecione a(s) data(s).");
       return;
@@ -737,30 +744,6 @@ export function TrainingManagement() {
     );
   };
 
-  if (selectedStore) {
-    return (
-      <StoreDetails
-        store={selectedStore}
-        trainings={periodTrainings}
-        onBack={() => {
-          setSelectedStore(null);
-          setActiveTab("dashboard");
-        }}
-        onSelectTraining={(training) => setSelectedTraining(training)}
-      />
-    );
-  }
-
-  if (selectedTrainingSettings) {
-    return (
-      <TrainingSettings
-        training={selectedTrainingSettings}
-        onBack={() => setSelectedTrainingSettings(null)}
-        onEdit={() => openEditingPage(selectedTrainingSettings)}
-      />
-    );
-  }
-
   if (selectedTraining) {
     return (
       <TrainingDetails
@@ -777,6 +760,43 @@ export function TrainingManagement() {
             attendanceList: list,
           }));
         }}
+      />
+    );
+  }
+
+  if (selectedStore) {
+    // Adaptador: LojaExplorador (API Go) → props do StoreDetails.
+    // IMPORTANTE: o backend Go recebe loja_id como UUID string.
+    // Passamos o UUID original em "lojaId" para que StoreDetails use no endpoint de PDF.
+    const storeForDetails = {
+      id: 0, // mantido por compatibilidade de tipo mas não usado para PDF
+      lojaId: selectedStore.id, // UUID string original — usado na chamada /api/relatorios/loja/dossie
+      name: selectedStore.nome || (selectedStore as any).Nome || "",
+      luc:  selectedStore.luc  || (selectedStore as any).LUC  || "",
+      segment: selectedStore.segmento || (selectedStore as any).Segmento || "",
+      manager: (selectedStore as any).gerente || (selectedStore as any).Gerente || "Não informado",
+    };
+    return (
+      <StoreDetails
+        store={storeForDetails}
+        trainings={periodTrainings}
+        onBack={() => {
+          setSelectedStore(null);
+          setActiveTab("dashboard");
+        }}
+        onSelectTraining={(training) => setSelectedTraining(training)}
+        defaultDataInicio={periodoDataInicio}
+        defaultDataFim={periodoDataFim}
+      />
+    );
+  }
+
+  if (selectedTrainingSettings) {
+    return (
+      <TrainingSettings
+        training={selectedTrainingSettings}
+        onBack={() => setSelectedTrainingSettings(null)}
+        onEdit={() => openEditingPage(selectedTrainingSettings)}
       />
     );
   }
@@ -1847,125 +1867,13 @@ export function TrainingManagement() {
                 </CardContent>
               </Card>
 
-              {/* Store Explorer */}
-              <Card className="mt-8 bg-white border-gray-200 shadow-sm">
-                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-base font-semibold text-gray-800">
-                      Explorador de Lojas
-                    </CardTitle>
-                    <CardDescription>
-                      Analise o desempenho e engajamento de cada loja
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                    <div className="relative w-full sm:w-48">
-                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Filtrar por LUC..."
-                        value={lucSearchQuery}
-                        onChange={(e) => setLucSearchQuery(e.target.value)}
-                        className="pl-9 bg-gray-50 border-transparent focus:bg-white"
-                      />
-                    </div>
-                    <div className="relative w-full sm:w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Buscar loja..."
-                        value={storeSearchQuery}
-                        onChange={(e) => setStoreSearchQuery(e.target.value)}
-                        className="pl-9 bg-gray-50 border-transparent focus:bg-white"
-                      />
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="font-semibold text-gray-600">
-                            Loja / LUC
-                          </TableHead>
-                          <TableHead className="font-semibold text-gray-600">
-                            Segmento
-                          </TableHead>
-                          <TableHead className="font-semibold text-gray-600 text-center">
-                            Treinamentos Totais
-                          </TableHead>
-                          <TableHead className="font-semibold text-gray-600 text-center">
-                            % Participação
-                          </TableHead>
-                          <TableHead className="font-semibold text-gray-600 text-right">
-                            Ação
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {storeExplorerData
-                          .filter(
-                            (store) =>
-                              store.name
-                                .toLowerCase()
-                                .includes(storeSearchQuery.toLowerCase()) &&
-                              store.luc
-                                .toLowerCase()
-                                .includes(lucSearchQuery.toLowerCase()),
-                          )
-                          .map((store) => (
-                            <TableRow
-                              key={store.id}
-                              className="cursor-pointer hover:bg-gray-50 transition-colors group"
-                              onClick={() => setSelectedStore(store)}
-                            >
-                              <TableCell className="font-medium text-gray-900">
-                                <div className="flex flex-col">
-                                  <span>{store.name}</span>
-                                  <span className="text-xs text-gray-500 font-normal">
-                                    {store.luc}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-gray-500">
-                                {store.segment}
-                              </TableCell>
-                              <TableCell className="text-center text-gray-900">
-                                {store.totalTrainings}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <span
-                                  className={cn(
-                                    "font-medium",
-                                    store.participation >= 80
-                                      ? "text-green-600"
-                                      : store.participation >= 50
-                                        ? "text-orange-500"
-                                        : "text-[#D93030]",
-                                  )}
-                                >
-                                  {store.participation}%
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-[#D93030] border-gray-200 hover:bg-red-50 hover:text-[#D93030]"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedStore(store);
-                                  }}
-                                >
-                                  Ver Detalhes
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Store Explorer — dados reais da API com filtro de período reativo */}
+              <StoreExplorer
+                dataInicio={periodoDataInicio}
+                dataFim={periodoDataFim}
+                trainings={periodTrainings}
+                onSelectStore={(loja) => setSelectedStore(loja)}
+              />
             </div>
           </TabsContent>
         </Tabs>
