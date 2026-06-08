@@ -51,8 +51,6 @@ interface StoreExplorerProps {
   dataInicio: string;
   /** Data fim do período global no formato YYYY-MM-DD */
   dataFim: string;
-  /** Lista de treinamentos já carregados no período (para passar ao StoreDetails) */
-  trainings: any[];
   /** Callback disparado quando o usuário clica em "Ver Detalhes" de uma loja */
   onSelectStore: (store: LojaExplorador) => void;
 }

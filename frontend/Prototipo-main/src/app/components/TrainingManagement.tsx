@@ -19,7 +19,6 @@ import {
   Store,
   UserCheck,
   Activity,
-  Hash,
   List,
   ChevronLeft,
   CheckCircle2,
@@ -65,14 +64,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
 import { Badge } from "./ui/badge";
 import {
   format,
@@ -184,71 +175,6 @@ const normalizeTrainingFromApi = (training: ApiTraining) => {
   };
 };
 
-const mockStoreData = [
-  {
-    id: 1,
-    name: "Renner",
-    segment: "Vestuário",
-    manager: "Carlos Silva",
-    luc: "LUC-101",
-  },
-  {
-    id: 2,
-    name: "C&A",
-    segment: "Vestuário",
-    manager: "Ana Oliveira",
-    luc: "LUC-102",
-  },
-  {
-    id: 3,
-    name: "Centauro",
-    segment: "Artigos Esportivos",
-    manager: "Pedro Santos",
-    luc: "LUC-105",
-  },
-  {
-    id: 4,
-    name: "O Boticário",
-    segment: "Cosméticos",
-    manager: "Julia Lima",
-    luc: "LUC-104",
-  },
-  {
-    id: 5,
-    name: "Riachuelo",
-    segment: "Vestuário",
-    manager: "Roberto Almeida",
-    luc: "LUC-103",
-  },
-  {
-    id: 6,
-    name: "Loja de Informática XYZ",
-    segment: "Tecnologia",
-    manager: "Fernanda Costa",
-    luc: "LUC-106",
-  },
-  {
-    id: 7,
-    name: "Moda Íntima ABC",
-    segment: "Vestuário",
-    manager: "Marcos Pereira",
-    luc: "LUC-107",
-  },
-  {
-    id: 8,
-    name: "Acessórios e Cia",
-    segment: "Acessórios",
-    manager: "Luciana Gomes",
-    luc: "LUC-108",
-  },
-  {
-    id: 9,
-    name: "Ótica Elegance",
-    segment: "Óticas",
-    manager: "Beatriz Nogueira",
-    luc: "LUC-109",
-  },
-];
 
 export function TrainingManagement() {
   const [trainingsList, setTrainingsList] = useState<any[]>([]);
@@ -313,14 +239,6 @@ export function TrainingManagement() {
     setCurrentMonthFim(new Date(anoSelecionado, currentMonthFim.getMonth(), 1));
   }, [anoSelecionado]);
 
-  useEffect(() => {
-    fetch(
-      `http://localhost:8080/api/treinamentos/dashboard?periodo=${dashboardPeriod}`,
-    )
-      .then((res) => res.json())
-      .then((data) => setDashboardData(data))
-      .catch((err) => console.error("Erro ao carregar o dashboard:", err));
-  }, [dashboardPeriod]);
 
   const carregarTreinamentos = async () => {
     setIsLoadingTrainings(true);
@@ -366,17 +284,6 @@ export function TrainingManagement() {
     return `${anoSelecionado}-12-31`;
   })();
 
-  const aplicarFiltroDashboard = async () => {
-    const dataInicio = periodoDataInicio;
-    const dataFim = periodoDataFim;
-
-    if (
-      (tipoFiltro === "personalizado" || tipoFiltro === "dia") &&
-      !dataInicioCustom
-    ) {
-      alert("Por favor, selecione a(s) data(s).");
-      return;
-  // Função dinâmica para carregar e atualizar o Dashboard com base nos filtros
   const carregarDadosDashboard = async () => {
     let dataInicio = "2026-01-01";
     let dataFim = "2026-12-31";
@@ -423,49 +330,7 @@ export function TrainingManagement() {
     dataFimCustom,
   ]);
 
-  const carregarTreinamentos = async () => {
-    setIsLoadingTrainings(true);
-    setTrainingsError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/treinamentos`);
-      if (!response.ok) throw new Error("Erro ao buscar treinamentos");
-      const data: ApiTraining[] = await response.json();
-      setTrainingsList((data || []).map(normalizeTrainingFromApi));
-    } catch (error) {
-      console.error("Erro ao carregar treinamentos:", error);
-      setTrainingsError(
-        "Erro ao conectar com a API. Confira se o backend Go esta rodando.",
-      );
-      setTrainingsList([]);
-    } finally {
-      setIsLoadingTrainings(false);
-    }
-  };
 
-  useEffect(() => {
-    carregarTreinamentos();
-  }, []);
-
-  // 🚀 ADICIONE ESTE BLOCO DE VOLTA AQUI PARA RESOLVER O ERRO:
-  const storeExplorerData = mockStoreData.map((store) => {
-    // Como os treinamentos vêm do back, filtramos os que já aconteceram para calcular a participação
-    const pastTrainings = trainingsList.filter((t) => {
-      const d = new Date(t.dataHora);
-      return d < new Date() && !t.isCancelado;
-    });
-
-    const periodAttendance = pastTrainings
-      .map((t) => t.attendanceList?.find((a: any) => a.id === store.id))
-      .filter(Boolean) as any[];
-
-    const total = periodAttendance.length;
-    const presentes = periodAttendance.filter(
-      (a) => a.status === "Presente",
-    ).length;
-    const participation = total > 0 ? Math.round((presentes / total) * 100) : 0;
-
-    return { ...store, totalTrainings: total, participation };
-  });
 
   const now = new Date();
 
@@ -1769,7 +1634,6 @@ export function TrainingManagement() {
               <StoreExplorer
                 dataInicio={periodoDataInicio}
                 dataFim={periodoDataFim}
-                trainings={periodTrainings}
                 onSelectStore={(loja) => setSelectedStore(loja)}
               />
             </div>
