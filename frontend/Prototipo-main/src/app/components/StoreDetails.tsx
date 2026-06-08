@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { supabase } from "../lib/supabaseClient";
 import {
   ArrowLeft,
   Calendar,
@@ -36,7 +35,7 @@ export interface StoreDetailsProps {
     segment: string;
     manager: string;
   };
-  trainings: any[];
+  trainings: any[];          // Array global (usado apenas como fallback de navegação)
   onBack: () => void;
   onSelectTraining: (training: any) => void;
   defaultDataInicio?: string;
@@ -51,6 +50,18 @@ function resolveStatus(training: any): "agendado" | "concluido" | "cancelado" {
   const dataHora = training.dataHora || training.data_hora || "";
   if (!dataHora) return "concluido";
   return new Date(dataHora) > new Date() ? "agendado" : "concluido";
+}
+
+/** Normaliza uma string de data (ISO ou DD/MM/YYYY) para YYYY-MM-DD */
+function normalizarData(raw: string): string {
+  if (!raw) return "";
+  const s = raw.trim();
+  if (s.includes("/")) {
+    const p = s.split("/");
+    if (p.length === 3) return `${p[2]}-${p[1]}-${p[0]}`;
+  }
+  if (s.includes("T")) return s.split("T")[0];
+  return s; // já é YYYY-MM-DD
 }
 
 const STATUS_CONFIG = {
@@ -71,11 +82,23 @@ const STATUS_CONFIG = {
   },
 } as const;
 
+// ── Tipo interno para um treinamento desta loja ───────────────────────────────
+
+interface TreinamentoLoja {
+  treinamento_id: string;
+  tema: string;
+  data: string;          // YYYY-MM-DD normalizado
+  dataRaw: string;       // valor original do banco para exibição
+  hora: string;
+  presentes: string[];
+  ausentes: string[];
+}
+
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export function StoreDetails({
   store,
-  trainings,
+  trainings,              // mantido para onSelectTraining global (fallback)
   onBack,
   onSelectTraining,
   defaultDataInicio = "",
@@ -85,7 +108,80 @@ export function StoreDetails({
   const [dataFim, setDataFim] = useState(defaultDataFim);
   const [isExporting, setIsExporting] = useState(false);
 
-  // ── Export PDF Corrigido (Ajustado para horario_inicio e data) ──────────────
+  // ── Estado dos dados da loja ──────────────────────────────────────────────
+  const [todosOsTreinamentos, setTodosOsTreinamentos] = useState<TreinamentoLoja[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  // ── Busca no Go Backend ao montar ou ao mudar de loja ──────────────────────
+  useEffect(() => {
+    const idParaBackend = store.lojaId || String(store.id);
+
+    const fetchPresencas = async () => {
+      setIsLoadingData(true);
+      setLoadError("");
+
+      try {
+        const response = await fetch(`http://localhost:8080/api/lojas/historico?id=${idParaBackend}`);
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        const data = await response.json();
+
+        // data já vem agrupado no formato do models.TreinamentoLojaItem do Go
+        const mapped: TreinamentoLoja[] = (data || []).map((t: any) => ({
+          treinamento_id: t.treinamento_id,
+          tema: t.tema,
+          data: t.data,
+          dataRaw: t.data,
+          hora: t.horario_inicio,
+          presentes: t.presentes || [],
+          ausentes: t.ausentes || [],
+        }));
+
+        setTodosOsTreinamentos(mapped);
+      } catch (err: any) {
+        console.error("StoreDetails: erro ao buscar presenças via Go backend:", err);
+        setLoadError("Não foi possível carregar os dados desta loja.");
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchPresencas();
+  }, [store.lojaId, store.id]);
+
+  // ── Filtro reativo pelo período selecionado ───────────────────────────────
+  const treinamentosNoPeriodo = useMemo(() => {
+    if (!dataInicio || !dataFim) return todosOsTreinamentos;
+
+    return todosOsTreinamentos.filter(
+      (t) => t.data >= dataInicio && t.data <= dataFim
+    );
+  }, [todosOsTreinamentos, dataInicio, dataFim]);
+
+  // Ordena do mais recente para o mais antigo
+  const treinamentosOrdenados = useMemo(
+    () => [...treinamentosNoPeriodo].sort((a, b) => b.data.localeCompare(a.data)),
+    [treinamentosNoPeriodo]
+  );
+
+  // ── KPIs derivados ────────────────────────────────────────────────────────
+  const totalTreinamentos = treinamentosOrdenados.length;
+
+  const totalPresentes = treinamentosOrdenados.reduce(
+    (acc, t) => acc + t.presentes.length,
+    0
+  );
+  const totalConvocados = treinamentosOrdenados.reduce(
+    (acc, t) => acc + t.presentes.length + t.ausentes.length,
+    0
+  );
+
+  const taxaFrequencia =
+    totalConvocados > 0 ? Math.round((totalPresentes / totalConvocados) * 100) : 0;
+
+  // ── Export PDF ────────────────────────────────────────────────────────────
   const handleExportPDF = async () => {
     if (!dataInicio || !dataFim) {
       toast.error("Por favor, preencha ambas as datas para o período.");
@@ -93,75 +189,14 @@ export function StoreDetails({
     }
     setIsExporting(true);
     try {
-      // Usa lojaId (UUID do banco) preferencialmente; fallback para store.id por compatibilidade
-      const idParaBackend = store.lojaId || String(store.id);
+      // Monta o histórico a partir dos dados já carregados (sem re-consultar o banco)
+      const historicoList = treinamentosOrdenados.map((t) => ({
+        tema: t.tema,
+        data: t.dataRaw || t.data,
+        presentes: t.presentes,
+        ausentes: t.ausentes,
+      }));
 
-      // 1. Buscando exatamente 'horario_inicio' e 'data' conforme a estrutura real do seu Supabase
-      const { data: presencas, error: dbError } = await supabase
-        .from("presencas")
-        .select(`
-          status_presenca,
-          nome_participante,
-          treinamento_id,
-          treinamentos (
-            tema,
-            horario_inicio,
-            data
-          )
-        `)
-        .eq("loja_id", idParaBackend);
-
-      if (dbError) throw dbError;
-
-      // 2. Agrupa os participantes por treinamento filtrando estritamente pelo período
-      const group: { [id: string]: { tema: string, data: string, presentes: string[], ausentes: string[] } } = {};
-
-      presencas?.forEach((p: any) => {
-        const t = p.treinamentos;
-        if (!t) return;
-
-        // Usa o campo 'data' puro (que já captura dia, mês e ano) para fazer o filtro do período
-        // O formato esperado em dataInicio/dataFim costuma ser YYYY-MM-DD. 
-        // Se o seu campo 'data' no banco vier invertido (ex: DD/MM/YYYY), ele precisa ser normalizado.
-        let tDate = String(t.data || "").trim();
-
-        // Se o campo 'data' vier no formato DD/MM/YYYY, convertemos para YYYY-MM-DD para o filtro funcionar:
-        if (tDate.includes("/")) {
-          const partes = tDate.split("/");
-          if (partes.length === 3) {
-            tDate = `${partes[2]}-${partes[1]}-${partes[0]}`; // vira YYYY-MM-DD
-          }
-        } else if (tDate.includes("T")) {
-          tDate = tDate.split("T")[0];
-        }
-
-        if (!tDate) return;
-
-        // Filtro estrito do período selecionado
-        if (tDate < dataInicio || tDate > dataFim) return;
-
-        if (!group[p.treinamento_id]) {
-          group[p.treinamento_id] = {
-            tema: t.tema || "Treinamento sem Tema",
-            data: t.data || tDate, // Envia o campo de data legível para o backend Python montar o HTML
-            presentes: [],
-            ausentes: [],
-          };
-        }
-
-        const status = String(p.status_presenca || "").toUpperCase().trim();
-
-        // Verifica se o lojista compareceu ou não
-        if (status === "PRESENTE" || status === "CONFIRMADO" || status === "SIM") {
-          group[p.treinamento_id].presentes.push(p.nome_participante || "Participante Anônimo");
-        } else {
-          group[p.treinamento_id].ausentes.push(p.nome_participante || "Participante Anônimo");
-        }
-      });
-
-      const historicoList = Object.values(group);
-
-      // 3. Monta o payload exato com as chaves esperadas pelo script Python
       const payload = {
         dados_loja: {
           nome: store.name || "",
@@ -179,12 +214,9 @@ export function StoreDetails({
         historico_treinamentos: historicoList,
       };
 
-      // 4. Dispara a requisição para o microsserviço Python
       const response = await fetch("http://localhost:8000/api/automacoes/pdf/dossie", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -213,32 +245,24 @@ export function StoreDetails({
     }
   };
 
-  // ── Dados derivados ────────────────────────────────────────────────────────
-  // Exibe TODOS os treinamentos do período passados ao componente (já filtrados
-  // pelo pai), ordenados do mais recente para o mais antigo.
-  // Isso garante que a lista funcione tanto com dados reais do backend
-  // quanto com dados de attendanceList do mock.
-  const sortedTrainings = [...trainings].sort((a, b) => {
-    const dateA = new Date(a.dataHora || a.data_hora || 0).getTime();
-    const dateB = new Date(b.dataHora || b.data_hora || 0).getTime();
-    return dateB - dateA;
-  });
+  // ── Próximo treinamento (agendado) ────────────────────────────────────────
+  // Usa o array global para buscar um agendamento futuro desta loja,
+  // caso exista no array global (compatibilidade com dados do pai).
+  const proximoAgendado = useMemo(() => {
+    const now = new Date();
+    return [...trainings]
+      .filter((t) => {
+        const dh = new Date(t.dataHora || t.data_hora || 0);
+        return dh > now && !t.isCancelado;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.dataHora || a.data_hora || 0).getTime() -
+          new Date(b.dataHora || b.data_hora || 0).getTime()
+      )[0] ?? null;
+  }, [trainings]);
 
-  const totalTreinamentos = sortedTrainings.length;
-  const concluidos = sortedTrainings.filter(
-    (t) => resolveStatus(t) === "concluido"
-  ).length;
-  const agendados = sortedTrainings.filter(
-    (t) => resolveStatus(t) === "agendado"
-  ).length;
-
-  // Taxa de realização: concluídos / total (excluindo cancelados)
-  const naoCancel = totalTreinamentos - sortedTrainings.filter(
-    (t) => resolveStatus(t) === "cancelado"
-  ).length;
-  const taxaRealizacao =
-    naoCancel > 0 ? Math.round((concluidos / naoCancel) * 100) : 0;
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <main
       className="flex-1 min-h-screen flex flex-col"
@@ -269,7 +293,6 @@ export function StoreDetails({
                   {store.name}
                 </h1>
                 <p className="text-sm font-medium text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
-                  {/* LUC exibido diretamente — sem formatação que altere o valor */}
                   {store.luc && (
                     <>
                       <span className="font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md">
@@ -292,7 +315,7 @@ export function StoreDetails({
             </div>
           </div>
 
-          {/* Seletor de período para exportar PDF */}
+          {/* Seletor de período */}
           <div className="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
             <div className="flex flex-col gap-1.5">
               <label
@@ -326,7 +349,7 @@ export function StoreDetails({
             </div>
             <button
               onClick={handleExportPDF}
-              disabled={isExporting}
+              disabled={isExporting || isLoadingData}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all bg-[#C4151F] hover:bg-[#A31219] disabled:opacity-50 min-h-[40px] cursor-pointer"
             >
               {isExporting ? (
@@ -350,34 +373,41 @@ export function StoreDetails({
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-          {/* Taxa de realização */}
+
+          {/* Taxa de Frequência */}
           <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-1 px-5 pt-5">
               <CardTitle className="text-xs font-medium text-gray-600">
-                Taxa de Realização
+                Taxa Geral de Frequência
               </CardTitle>
               <Award className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent className="px-5 pb-5">
-              <div className="flex items-baseline gap-3">
-                <div className="text-2xl font-bold text-gray-900">
-                  {taxaRealizacao}%
-                </div>
-                {taxaRealizacao >= 70 ? (
-                  <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md">
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    Alta
-                  </span>
-                ) : (
-                  <span className="flex items-center text-xs font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md">
-                    <TrendingDown className="w-3 h-3 mr-1" />
-                    Baixa
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {concluidos} de {naoCancel} treinamentos concluídos
-              </p>
+              {isLoadingData ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-300 mt-1" />
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-3">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {taxaFrequencia}%
+                    </div>
+                    {taxaFrequencia >= 70 ? (
+                      <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md">
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        Alta
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-xs font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md">
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        Baixa
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {totalPresentes} presentes de {totalConvocados} convocados
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -385,20 +415,25 @@ export function StoreDetails({
           <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-1 px-5 pt-5">
               <CardTitle className="text-xs font-medium text-gray-600">
-                Total no Período
+                Treinamentos no Período
               </CardTitle>
               <Calendar className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent className="px-5 pb-5">
-              <div className="text-2xl font-bold text-gray-900">
-                {totalTreinamentos}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {agendados > 0
-                  ? `${agendados} agendado${agendados > 1 ? "s" : ""} · `
-                  : ""}
-                {concluidos} concluído{concluidos !== 1 ? "s" : ""}
-              </p>
+              {isLoadingData ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-300 mt-1" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {totalTreinamentos}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {dataInicio && dataFim
+                      ? `${dataInicio} → ${dataFim}`
+                      : "Todos os períodos"}
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -411,37 +446,29 @@ export function StoreDetails({
               <BookOpen className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent className="px-5 pb-5">
-              {(() => {
-                const proximo = [...trainings]
-                  .filter((t) => resolveStatus(t) === "agendado")
-                  .sort(
-                    (a, b) =>
-                      new Date(a.dataHora || a.data_hora || 0).getTime() -
-                      new Date(b.dataHora || b.data_hora || 0).getTime()
-                  )[0];
-                return proximo ? (
-                  <>
-                    <div
-                      className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2 cursor-pointer hover:text-[#C4151F] transition-colors"
-                      onClick={() => onSelectTraining(proximo)}
-                    >
-                      {proximo.tema}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      {proximo.data} {proximo.hora ? `às ${proximo.hora}` : ""}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-sm font-semibold text-gray-400">
-                      Nenhum agendado
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      no período selecionado
-                    </p>
-                  </>
-                );
-              })()}
+              {proximoAgendado ? (
+                <>
+                  <div
+                    className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2 cursor-pointer hover:text-[#C4151F] transition-colors"
+                    onClick={() => onSelectTraining(proximoAgendado)}
+                  >
+                    {proximoAgendado.tema}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {proximoAgendado.data}{" "}
+                    {proximoAgendado.hora ? `às ${proximoAgendado.hora}` : ""}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-semibold text-gray-400">
+                    Nenhum agendado
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    no período selecionado
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -470,46 +497,93 @@ export function StoreDetails({
                     Tema
                   </TableHead>
                   <TableHead className="font-semibold text-gray-600 w-[160px] text-center px-6">
-                    Status
+                    Presença
                   </TableHead>
-                  <TableHead className="font-semibold text-gray-600 w-[140px] text-right px-6">
-                    Ações
+                  <TableHead className="font-semibold text-gray-600 w-[100px] text-center px-6">
+                    Status
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-gray-100">
-                {sortedTrainings.length > 0 ? (
-                  sortedTrainings.map((training) => {
-                    const status = resolveStatus(training);
-                    const { label, className, Icon } = STATUS_CONFIG[status];
+                {isLoadingData ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-2 text-gray-400">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                        <span className="text-sm">Carregando dados da loja...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : loadError ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-12 text-red-400">
+                      <p className="text-sm">{loadError}</p>
+                    </TableCell>
+                  </TableRow>
+                ) : treinamentosOrdenados.length > 0 ? (
+                  treinamentosOrdenados.map((treinamento) => {
+                    const totalConv = treinamento.presentes.length + treinamento.ausentes.length;
+                    const pct = totalConv > 0
+                      ? Math.round((treinamento.presentes.length / totalConv) * 100)
+                      : 0;
+
+                    // Status visual baseado na data
+                    const dataObj = treinamento.data ? new Date(treinamento.data + "T00:00:00") : null;
+                    const isFuturo = dataObj ? dataObj > new Date() : false;
+                    const statusKey: keyof typeof STATUS_CONFIG = isFuturo ? "agendado" : "concluido";
+                    const { label, className: statusClass, Icon } = STATUS_CONFIG[statusKey];
+
+                    // Tenta encontrar o objeto correspondente no array global de trainings
+                    const originalTraining = trainings.find(
+                      (t) => String(t.id) === treinamento.treinamento_id
+                    ) || trainings.find(
+                      (t) => t.tema === treinamento.tema
+                    );
 
                     return (
                       <TableRow
-                        key={training.id}
-                        className="group cursor-pointer hover:bg-slate-50 transition-colors"
-                        onClick={() => onSelectTraining(training)}
+                        key={treinamento.treinamento_id}
+                        className={cn(
+                          "group transition-colors",
+                          originalTraining ? "cursor-pointer hover:bg-gray-50/80" : "hover:bg-gray-50/80"
+                        )}
+                        onClick={originalTraining ? () => onSelectTraining(originalTraining) : undefined}
                       >
                         {/* Data */}
                         <TableCell className="text-gray-600 font-medium whitespace-nowrap px-6">
-                          {training.data || "—"}
-                          {training.hora && (
+                          {treinamento.dataRaw || treinamento.data || "—"}
+                          {treinamento.hora && (
                             <div className="text-xs text-gray-400 font-normal mt-0.5">
-                              {training.hora}
+                              {treinamento.hora}
                             </div>
                           )}
                         </TableCell>
 
-                        {/* Tema + Conteúdo */}
+                        {/* Tema */}
                         <TableCell className="px-6">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold text-gray-900 group-hover:text-[#C4151F] transition-colors leading-snug">
-                              {training.tema}
-                            </span>
-                            {training.conteudo && (
-                              <span className="text-sm text-gray-500 line-clamp-1">
-                                {training.conteudo}
-                              </span>
+                          <span className={cn(
+                            "font-semibold text-gray-900 leading-snug transition-colors flex items-center gap-1.5",
+                            originalTraining && "group-hover:text-[#C4151F]"
+                          )}>
+                            {treinamento.tema}
+                            {originalTraining && (
+                              <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
                             )}
+                          </span>
+                        </TableCell>
+
+                        {/* Presença: X / Y */}
+                        <TableCell className="text-center px-6">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className={cn(
+                              "text-sm font-semibold",
+                              pct >= 70 ? "text-emerald-600" : pct >= 40 ? "text-amber-500" : "text-red-500"
+                            )}>
+                              {treinamento.presentes.length} / {totalConv}
+                            </span>
+                            <span className="text-[11px] text-gray-400">
+                              {pct}% de presença
+                            </span>
                           </div>
                         </TableCell>
 
@@ -518,20 +592,12 @@ export function StoreDetails({
                           <span
                             className={cn(
                               "inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap",
-                              className
+                              statusClass
                             )}
                           >
                             <Icon className="w-3 h-3" />
                             {label}
                           </span>
-                        </TableCell>
-
-                        {/* Ação */}
-                        <TableCell className="text-right px-6">
-                          <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md transition-colors focus:outline-none group-hover:bg-gray-100 group-hover:text-gray-900 group-hover:border-gray-400">
-                            Ver Detalhes
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -544,7 +610,7 @@ export function StoreDetails({
                     >
                       <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">
-                        Nenhum treinamento registrado no período selecionado.
+                        Nenhum treinamento registrado para esta loja no período selecionado.
                       </p>
                     </TableCell>
                   </TableRow>
