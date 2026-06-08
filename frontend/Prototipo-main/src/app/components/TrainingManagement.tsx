@@ -19,7 +19,6 @@ import {
   Store,
   UserCheck,
   Activity,
-  Hash,
   List,
   ChevronLeft,
   CheckCircle2,
@@ -65,14 +64,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
 import { Badge } from "./ui/badge";
 import {
   format,
@@ -317,7 +308,31 @@ export function TrainingManagement() {
     setDataFimCustom("");
   }, [tipoFiltro]);
 
-  // ─── Derivação reativa do período selecionado (usado pelo dashboard E pelo StoreExplorer) ───
+  // Função centralizada e única que busca os treinamentos da API
+  const carregarTreinamentos = async () => {
+    setIsLoadingTrainings(true);
+    setTrainingsError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/treinamentos`);
+      if (!response.ok) throw new Error("Erro ao buscar treinamentos");
+      const data: ApiTraining[] = await response.json();
+      setTrainingsList((data || []).map(normalizeTrainingFromApi));
+    } catch (error) {
+      console.error("Erro ao carregar treinamentos:", error);
+      setTrainingsError(
+        "Erro ao conectar com a API. Confira se o backend Go esta rodando.",
+      );
+      setTrainingsList([]);
+    } finally {
+      setIsLoadingTrainings(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarTreinamentos();
+  }, []);
+
+  // ─── Derivação reativa do período selecionado ───
   const periodoDataInicio: string = (() => {
     if (tipoFiltro === "ano") return `${anoSelecionado}-01-01`;
     if (tipoFiltro === "mes") return `${anoSelecionado}-${mesSelecionado}-01`;
@@ -351,7 +366,6 @@ export function TrainingManagement() {
     return `${anoSelecionado}-12-31`;
   })();
 
-  // Função dinâmica para carregar e atualizar o Dashboard com base nos filtros reativos
   const carregarDadosDashboard = async () => {
     const dataInicio = periodoDataInicio;
     const dataFim = periodoDataFim;
@@ -360,7 +374,7 @@ export function TrainingManagement() {
       (tipoFiltro === "personalizado" || tipoFiltro === "dia") &&
       !dataInicioCustom
     ) {
-      return; // Aguarda a inserção das datas customizadas no premium calendar
+      return;
     }
 
     try {
@@ -374,7 +388,6 @@ export function TrainingManagement() {
     }
   };
 
-  // Dispara a busca do dashboard automaticamente sempre que qualquer dependência mudar
   useEffect(() => {
     carregarDadosDashboard();
   }, [
@@ -386,29 +399,6 @@ export function TrainingManagement() {
     dataInicioCustom,
     dataFimCustom,
   ]);
-
-  const carregarTreinamentos = async () => {
-    setIsLoadingTrainings(true);
-    setTrainingsError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/treinamentos`);
-      if (!response.ok) throw new Error("Erro ao buscar treinamentos");
-      const data: ApiTraining[] = await response.json();
-      setTrainingsList((data || []).map(normalizeTrainingFromApi));
-    } catch (error) {
-      console.error("Erro ao carregar treinamentos:", error);
-      setTrainingsError(
-        "Erro ao conectar com a API. Confira se o backend Go esta rodando.",
-      );
-      setTrainingsList([]);
-    } finally {
-      setIsLoadingTrainings(false);
-    }
-  };
-
-  useEffect(() => {
-    carregarTreinamentos();
-  }, []);
 
   const storeExplorerData = mockStoreData.map((store) => {
     const pastTrainings = trainingsList.filter((t) => {
