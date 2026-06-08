@@ -744,7 +744,7 @@ const toApiPayload = (data: FormValues) => ({
   capacidade_maxima: Number(data.capacidadeMaxima) || 0,
   segmento_alvo: data.segmento || data.publicoAlvo || "Geral",
   status: data.status || "agendado",
-  objective: data.objetivo || "",
+  objetivo: data.objetivo || "",
   observacoes: data.observacoes || "",
   material_apoio: "",
   responsavel: data.responsavel || "Admin",
@@ -838,16 +838,30 @@ export function TrainingForm({ onBack, onSuccess, initialData }: TrainingFormPro
   const isEditing = !!initialData;
 
   const onSubmit = async (data: FormValues) => {
-    if (isEditing) {
-      toast.info("A API atual ainda nao possui rota de edicao para treinamentos.");
-      return;
-    }
+    const payload = toApiPayload(data);
 
     try {
+      if (isEditing) {
+        const response = await fetch(`${API_BASE_URL}/api/treinamentos/editar?id=${initialData?.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || "Erro ao editar treinamento");
+        }
+
+        toast.success("Treinamento editado com sucesso");
+        onSuccess(data);
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/treinamentos/cadastrar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toApiPayload(data)),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
