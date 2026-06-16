@@ -530,13 +530,13 @@ export function TrainingManagement() {
     key: "todos" | "tema" | "segmento" | "data" | "conteudo" | "status";
     label: string;
   }[] = [
-    { key: "todos", label: "Todos" },
-    { key: "tema", label: "Tema" },
-    { key: "segmento", label: "Segmento" },
-    { key: "data", label: "Data" },
-    { key: "conteudo", label: "Conteúdo" },
-    { key: "status", label: "Status" },
-  ];
+      { key: "todos", label: "Todos" },
+      { key: "tema", label: "Tema" },
+      { key: "segmento", label: "Segmento" },
+      { key: "data", label: "Data" },
+      { key: "conteudo", label: "Conteúdo" },
+      { key: "status", label: "Status" },
+    ];
 
   const handlePrevMonth = () => setCalendarMonth(subMonths(calendarMonth, 1));
   const handleNextMonth = () => setCalendarMonth(addMonths(calendarMonth, 1));
@@ -707,13 +707,13 @@ export function TrainingManagement() {
   if (isCreating || editingTraining) {
     const formData = editingTraining
       ? {
-          ...editingTraining,
-          data: editingTraining.dataHora
-            ? editingTraining.dataHora.split("T")[0]
-            : "",
-          horarioInicio: editingTraining.hora || "",
-          segmento: editingTraining.segmento || "Geral (Todos os Segmentos)",
-        }
+        ...editingTraining,
+        data: editingTraining.dataHora
+          ? editingTraining.dataHora.split("T")[0]
+          : "",
+        horarioInicio: editingTraining.hora || "",
+        segmento: editingTraining.segmento || "Geral (Todos os Segmentos)",
+      }
       : undefined;
     return (
       <TrainingForm
@@ -946,18 +946,18 @@ export function TrainingManagement() {
                           {(isLoadingTrainings ||
                             trainingsError ||
                             currentItems.length === 0) && (
-                            <tr>
-                              <td
-                                colSpan={6}
-                                className="px-6 py-8 text-center text-sm text-gray-500"
-                              >
-                                {isLoadingTrainings
-                                  ? "Carregando treinamentos do banco de dados..."
-                                  : trainingsError ||
+                              <tr>
+                                <td
+                                  colSpan={6}
+                                  className="px-6 py-8 text-center text-sm text-gray-500"
+                                >
+                                  {isLoadingTrainings
+                                    ? "Carregando treinamentos do banco de dados..."
+                                    : trainingsError ||
                                     "Nenhum treinamento encontrado."}
-                              </td>
-                            </tr>
-                          )}
+                                </td>
+                              </tr>
+                            )}
                           {currentItems.map((row, idx) => {
                             const dataTreinamento = new Date(row.dataHora);
                             let status = "agendado";
@@ -1064,13 +1064,13 @@ export function TrainingManagement() {
                       {(isLoadingTrainings ||
                         trainingsError ||
                         currentItems.length === 0) && (
-                        <div className="p-6 text-center text-sm text-gray-500">
-                          {isLoadingTrainings
-                            ? "Carregando treinamentos do banco de dados..."
-                            : trainingsError ||
+                          <div className="p-6 text-center text-sm text-gray-500">
+                            {isLoadingTrainings
+                              ? "Carregando treinamentos do banco de dados..."
+                              : trainingsError ||
                               "Nenhum treinamento encontrado."}
-                        </div>
-                      )}
+                          </div>
+                        )}
                       {currentItems.map((row, idx) => {
                         const dataTreinamento = new Date(row.dataHora);
                         let status = "agendado";
@@ -1177,9 +1177,9 @@ export function TrainingManagement() {
                             style={
                               currentPage === page
                                 ? {
-                                    backgroundColor: "#D93030",
-                                    borderColor: "#D93030",
-                                  }
+                                  backgroundColor: "#D93030",
+                                  borderColor: "#D93030",
+                                }
                                 : undefined
                             }
                           >
@@ -1245,35 +1245,35 @@ export function TrainingManagement() {
                   {(tipoFiltro === "ano" ||
                     tipoFiltro === "mes" ||
                     tipoFiltro === "periodo_mes") && (
-                    <div className="flex flex-col gap-1.5 w-full sm:w-[130px]">
-                      <label className="text-xs font-semibold text-gray-500">
-                        Ano
-                      </label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <div className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-gray-50 text-gray-700">
-                            <span>{anoSelecionado}</span>
-                            <span className="text-xs text-gray-400">▼</span>
-                          </div>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-3 bg-white border border-gray-200 rounded-xl shadow-xl w-[210px] z-50">
-                          <div className="grid grid-cols-3 gap-2">
-                            {anosDisponiveis.map((ano) => (
-                              <PopoverClose key={ano} asChild>
-                                <button
-                                  type="button"
-                                  onClick={() => setAnoSelecionado(ano)}
-                                  className={`h-10 text-xs font-semibold rounded-lg transition-colors border ${anoSelecionado === ano ? "bg-[#D93030] text-white border-[#D93030]" : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"}`}
-                                >
-                                  {ano}
-                                </button>
-                              </PopoverClose>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
+                      <div className="flex flex-col gap-1.5 w-full sm:w-[130px]">
+                        <label className="text-xs font-semibold text-gray-500">
+                          Ano
+                        </label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <div className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-gray-50 text-gray-700">
+                              <span>{anoSelecionado}</span>
+                              <span className="text-xs text-gray-400">▼</span>
+                            </div>
+                          </PopoverTrigger>
+                          <PopoverContent className="p-3 bg-white border border-gray-200 rounded-xl shadow-xl w-[210px] z-50">
+                            <div className="grid grid-cols-3 gap-2">
+                              {anosDisponiveis.map((ano) => (
+                                <PopoverClose key={ano} asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAnoSelecionado(ano)}
+                                    className={`h-10 text-xs font-semibold rounded-lg transition-colors border ${anoSelecionado === ano ? "bg-[#D93030] text-white border-[#D93030]" : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"}`}
+                                  >
+                                    {ano}
+                                  </button>
+                                </PopoverClose>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    )}
 
                   {/* 3. INPUT EM GRADE: Só um mês */}
                   {tipoFiltro === "mes" && (
@@ -1393,9 +1393,9 @@ export function TrainingManagement() {
                             <span>
                               {dataInicioCustom
                                 ? format(
-                                    new Date(dataInicioCustom + "T00:00:00"),
-                                    "dd/MM/yyyy",
-                                  )
+                                  new Date(dataInicioCustom + "T00:00:00"),
+                                  "dd/MM/yyyy",
+                                )
                                 : "dd/mm/aaaa"}
                             </span>
                             <span className="text-xs text-gray-400">📅</span>
@@ -1425,9 +1425,9 @@ export function TrainingManagement() {
                             <span>
                               {dataFimCustom
                                 ? format(
-                                    new Date(dataFimCustom + "T00:00:00"),
-                                    "dd/MM/yyyy",
-                                  )
+                                  new Date(dataFimCustom + "T00:00:00"),
+                                  "dd/MM/yyyy",
+                                )
                                 : "dd/mm/aaaa"}
                             </span>
                             <span className="text-xs text-gray-400">📅</span>
@@ -1491,8 +1491,8 @@ export function TrainingManagement() {
                       value={
                         dashboardData?.totalLojasCadastradas > 0
                           ? ((dashboardData?.totalLojasImpactadas ?? 0) /
-                              dashboardData.totalLojasCadastradas) *
-                            100
+                            dashboardData.totalLojasCadastradas) *
+                          100
                           : 0
                       }
                       className="h-1.5 mt-4 bg-gray-100"
