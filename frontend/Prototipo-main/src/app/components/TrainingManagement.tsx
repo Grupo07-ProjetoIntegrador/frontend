@@ -19,7 +19,6 @@ import {
   Store,
   UserCheck,
   Activity,
-  Hash,
   List,
   ChevronLeft,
   CheckCircle2,
@@ -65,14 +64,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
 import { Badge } from "./ui/badge";
 import {
   format,
@@ -112,9 +103,19 @@ type ApiTraining = {
   conteudo?: string;
   status?: string;
   capacidade_maxima?: number;
+  descricao?: string;
+  categoria?: string;
+  local?: string;
+  modalidade?: string;
+  objetivo?: string;
+  observacoes?: string;
+  material_apoio?: string;
+  responsavel?: string;
+  area_responsavel?: string;
+  tags?: string;
+  recorrente?: boolean;
 };
 
-// Cria o componente que estava faltando para o compilador
 const PopoverClose = PopoverPrimitive.Close;
 
 const mesesGrid = [
@@ -269,7 +270,9 @@ export function TrainingManagement() {
   const [selectedTrainingSettings, setSelectedTrainingSettings] =
     useState<any>(null);
   const [trainingToDelete, setTrainingToDelete] = useState<any>(null);
-  const [selectedStore, setSelectedStore] = useState<LojaExplorador | null>(null);
+  const [selectedStore, setSelectedStore] = useState<LojaExplorador | null>(
+    null,
+  );
   const [storeSearchQuery, setStoreSearchQuery] = useState("");
   const [lucSearchQuery, setLucSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -305,27 +308,10 @@ export function TrainingManagement() {
     setDataFimCustom("");
   }, [tipoFiltro]);
 
-  // Atualiza a folha do calendário se o usuário mudar o ano no seletor principal
-  useEffect(() => {
-    setCurrentMonthInicio(
-      new Date(anoSelecionado, currentMonthInicio.getMonth(), 1),
-    );
-    setCurrentMonthFim(new Date(anoSelecionado, currentMonthFim.getMonth(), 1));
-  }, [anoSelecionado]);
-
-  useEffect(() => {
-    fetch(
-      `http://localhost:8080/api/treinamentos/dashboard?periodo=${dashboardPeriod}`,
-    )
-      .then((res) => res.json())
-      .then((data) => setDashboardData(data))
-      .catch((err) => console.error("Erro ao carregar o dashboard:", err));
-  }, [dashboardPeriod]);
-
+  // Função centralizada e única que busca os treinamentos da API
   const carregarTreinamentos = async () => {
     setIsLoadingTrainings(true);
     setTrainingsError("");
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/treinamentos`);
       if (!response.ok) throw new Error("Erro ao buscar treinamentos");
@@ -346,12 +332,12 @@ export function TrainingManagement() {
     carregarTreinamentos();
   }, []);
 
-  // ─── Derivação reativa do período selecionado (usado pelo dashboard E pelo StoreExplorer) ───
-  // Sempre reflete os controles de filtro sem precisar clicar em "Filtrar".
+  // ─── Derivação reativa do período selecionado ───
   const periodoDataInicio: string = (() => {
     if (tipoFiltro === "ano") return `${anoSelecionado}-01-01`;
     if (tipoFiltro === "mes") return `${anoSelecionado}-${mesSelecionado}-01`;
-    if (tipoFiltro === "periodo_mes") return `${anoSelecionado}-${mesInicio}-01`;
+    if (tipoFiltro === "periodo_mes")
+      return `${anoSelecionado}-${mesInicio}-01`;
     if (tipoFiltro === "personalizado" || tipoFiltro === "dia")
       return dataInicioCustom || `${anoSelecionado}-01-01`;
     return `${anoSelecionado}-01-01`;
@@ -359,14 +345,28 @@ export function TrainingManagement() {
 
   const periodoDataFim: string = (() => {
     if (tipoFiltro === "ano") return `${anoSelecionado}-12-31`;
-    if (tipoFiltro === "mes") return `${anoSelecionado}-${mesSelecionado}-31`;
-    if (tipoFiltro === "periodo_mes") return `${anoSelecionado}-${mesFim}-31`;
-    if (tipoFiltro === "dia") return dataInicioCustom || `${anoSelecionado}-12-31`;
-    if (tipoFiltro === "personalizado") return dataFimCustom || `${anoSelecionado}-12-31`;
+    if (tipoFiltro === "mes") {
+      const primeiroDia = new Date(
+        anoSelecionado,
+        parseInt(mesSelecionado) - 1,
+        1,
+      );
+      return format(endOfMonth(primeiroDia), "yyyy-MM-dd");
+    }
+    if (tipoFiltro === "periodo_mes") {
+      const ultimoDiaObjeto = endOfMonth(
+        new Date(anoSelecionado, parseInt(mesFim) - 1, 1),
+      );
+      return format(ultimoDiaObjeto, "yyyy-MM-dd");
+    }
+    if (tipoFiltro === "dia")
+      return dataInicioCustom || `${anoSelecionado}-12-31`;
+    if (tipoFiltro === "personalizado")
+      return dataFimCustom || `${anoSelecionado}-12-31`;
     return `${anoSelecionado}-12-31`;
   })();
 
-  const aplicarFiltroDashboard = async () => {
+  const carregarDadosDashboard = async () => {
     const dataInicio = periodoDataInicio;
     const dataFim = periodoDataFim;
 
@@ -374,29 +374,7 @@ export function TrainingManagement() {
       (tipoFiltro === "personalizado" || tipoFiltro === "dia") &&
       !dataInicioCustom
     ) {
-      alert("Por favor, selecione a(s) data(s).");
       return;
-  // Função dinâmica para carregar e atualizar o Dashboard com base nos filtros
-  const carregarDadosDashboard = async () => {
-    let dataInicio = "2026-01-01";
-    let dataFim = "2026-12-31";
-
-    if (tipoFiltro === "ano") {
-      dataInicio = `${anoSelecionado}-01-01`;
-      dataFim = `${anoSelecionado}-12-31`;
-    } else if (tipoFiltro === "mes") {
-      dataInicio = `${anoSelecionado}-${mesSelecionado}-01`;
-      dataFim = `${anoSelecionado}-${mesSelecionado}-31`;
-    } else if (tipoFiltro === "periodo_mes") {
-      dataInicio = `${anoSelecionado}-${mesInicio}-01`;
-      dataFim = `${anoSelecionado}-${mesFim}-31`;
-    } else if (tipoFiltro === "personalizado" || tipoFiltro === "dia") {
-      if (!dataInicioCustom) return; // Aguarda a seleção da data customizada
-      dataInicio = dataInicioCustom;
-      dataFim =
-        tipoFiltro === "dia"
-          ? dataInicioCustom
-          : dataFimCustom || dataInicioCustom;
     }
 
     try {
@@ -410,7 +388,6 @@ export function TrainingManagement() {
     }
   };
 
-  // Dispara a busca do dashboard sempre que qualquer dependência de filtragem for alterada
   useEffect(() => {
     carregarDadosDashboard();
   }, [
@@ -423,32 +400,7 @@ export function TrainingManagement() {
     dataFimCustom,
   ]);
 
-  const carregarTreinamentos = async () => {
-    setIsLoadingTrainings(true);
-    setTrainingsError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/treinamentos`);
-      if (!response.ok) throw new Error("Erro ao buscar treinamentos");
-      const data: ApiTraining[] = await response.json();
-      setTrainingsList((data || []).map(normalizeTrainingFromApi));
-    } catch (error) {
-      console.error("Erro ao carregar treinamentos:", error);
-      setTrainingsError(
-        "Erro ao conectar com a API. Confira se o backend Go esta rodando.",
-      );
-      setTrainingsList([]);
-    } finally {
-      setIsLoadingTrainings(false);
-    }
-  };
-
-  useEffect(() => {
-    carregarTreinamentos();
-  }, []);
-
-  // 🚀 ADICIONE ESTE BLOCO DE VOLTA AQUI PARA RESOLVER O ERRO:
   const storeExplorerData = mockStoreData.map((store) => {
-    // Como os treinamentos vêm do back, filtramos os que já aconteceram para calcular a participação
     const pastTrainings = trainingsList.filter((t) => {
       const d = new Date(t.dataHora);
       return d < new Date() && !t.isCancelado;
@@ -578,13 +530,13 @@ export function TrainingManagement() {
     key: "todos" | "tema" | "segmento" | "data" | "conteudo" | "status";
     label: string;
   }[] = [
-    { key: "todos", label: "Todos" },
-    { key: "tema", label: "Tema" },
-    { key: "segmento", label: "Segmento" },
-    { key: "data", label: "Data" },
-    { key: "conteudo", label: "Conteúdo" },
-    { key: "status", label: "Status" },
-  ];
+      { key: "todos", label: "Todos" },
+      { key: "tema", label: "Tema" },
+      { key: "segmento", label: "Segmento" },
+      { key: "data", label: "Data" },
+      { key: "conteudo", label: "Conteúdo" },
+      { key: "status", label: "Status" },
+    ];
 
   const handlePrevMonth = () => setCalendarMonth(subMonths(calendarMonth, 1));
   const handleNextMonth = () => setCalendarMonth(addMonths(calendarMonth, 1));
@@ -716,16 +668,16 @@ export function TrainingManagement() {
   }
 
   if (selectedStore) {
-    // Adaptador: LojaExplorador (API Go) → props do StoreDetails.
-    // IMPORTANTE: o backend Go recebe loja_id como UUID string.
-    // Passamos o UUID original em "lojaId" para que StoreDetails use no endpoint de PDF.
     const storeForDetails = {
-      id: 0, // mantido por compatibilidade de tipo mas não usado para PDF
-      lojaId: selectedStore.id, // UUID string original — usado na chamada /api/relatorios/loja/dossie
+      id: 0,
+      lojaId: selectedStore.id,
       name: selectedStore.nome || (selectedStore as any).Nome || "",
-      luc:  selectedStore.luc  || (selectedStore as any).LUC  || "",
+      luc: selectedStore.luc || (selectedStore as any).LUC || "",
       segment: selectedStore.segmento || (selectedStore as any).Segmento || "",
-      manager: (selectedStore as any).gerente || (selectedStore as any).Gerente || "Não informado",
+      manager:
+        (selectedStore as any).gerente ||
+        (selectedStore as any).Gerente ||
+        "Não informado",
     };
     return (
       <StoreDetails
@@ -755,13 +707,13 @@ export function TrainingManagement() {
   if (isCreating || editingTraining) {
     const formData = editingTraining
       ? {
-          ...editingTraining,
-          data: editingTraining.dataHora
-            ? editingTraining.dataHora.split("T")[0]
-            : "",
-          horarioInicio: editingTraining.hora || "",
-          segmento: editingTraining.segmento || "Geral (Todos os Segmentos)",
-        }
+        ...editingTraining,
+        data: editingTraining.dataHora
+          ? editingTraining.dataHora.split("T")[0]
+          : "",
+        horarioInicio: editingTraining.hora || "",
+        segmento: editingTraining.segmento || "Geral (Todos os Segmentos)",
+      }
       : undefined;
     return (
       <TrainingForm
@@ -994,18 +946,18 @@ export function TrainingManagement() {
                           {(isLoadingTrainings ||
                             trainingsError ||
                             currentItems.length === 0) && (
-                            <tr>
-                              <td
-                                colSpan={6}
-                                className="px-6 py-8 text-center text-sm text-gray-500"
-                              >
-                                {isLoadingTrainings
-                                  ? "Carregando treinamentos do banco de dados..."
-                                  : trainingsError ||
+                              <tr>
+                                <td
+                                  colSpan={6}
+                                  className="px-6 py-8 text-center text-sm text-gray-500"
+                                >
+                                  {isLoadingTrainings
+                                    ? "Carregando treinamentos do banco de dados..."
+                                    : trainingsError ||
                                     "Nenhum treinamento encontrado."}
-                              </td>
-                            </tr>
-                          )}
+                                </td>
+                              </tr>
+                            )}
                           {currentItems.map((row, idx) => {
                             const dataTreinamento = new Date(row.dataHora);
                             let status = "agendado";
@@ -1112,13 +1064,13 @@ export function TrainingManagement() {
                       {(isLoadingTrainings ||
                         trainingsError ||
                         currentItems.length === 0) && (
-                        <div className="p-6 text-center text-sm text-gray-500">
-                          {isLoadingTrainings
-                            ? "Carregando treinamentos do banco de dados..."
-                            : trainingsError ||
+                          <div className="p-6 text-center text-sm text-gray-500">
+                            {isLoadingTrainings
+                              ? "Carregando treinamentos do banco de dados..."
+                              : trainingsError ||
                               "Nenhum treinamento encontrado."}
-                        </div>
-                      )}
+                          </div>
+                        )}
                       {currentItems.map((row, idx) => {
                         const dataTreinamento = new Date(row.dataHora);
                         let status = "agendado";
@@ -1225,9 +1177,9 @@ export function TrainingManagement() {
                             style={
                               currentPage === page
                                 ? {
-                                    backgroundColor: "#D93030",
-                                    borderColor: "#D93030",
-                                  }
+                                  backgroundColor: "#D93030",
+                                  borderColor: "#D93030",
+                                }
                                 : undefined
                             }
                           >
@@ -1289,41 +1241,41 @@ export function TrainingManagement() {
                     </Select>
                   </div>
 
-                  {/* 2. INPUT EM GRADE: Filtro por Ano (Popover e Grid 3x3) */}
+                  {/* 2. INPUT EM GRADE: Filtro por Ano */}
                   {(tipoFiltro === "ano" ||
                     tipoFiltro === "mes" ||
                     tipoFiltro === "periodo_mes") && (
-                    <div className="flex flex-col gap-1.5 w-full sm:w-[130px]">
-                      <label className="text-xs font-semibold text-gray-500">
-                        Ano
-                      </label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <div className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-gray-50 text-gray-700">
-                            <span>{anoSelecionado}</span>
-                            <span className="text-xs text-gray-400">▼</span>
-                          </div>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-3 bg-white border border-gray-200 rounded-xl shadow-xl w-[210px] z-50">
-                          <div className="grid grid-cols-3 gap-2">
-                            {anosDisponiveis.map((ano) => (
-                              <PopoverClose key={ano} asChild>
-                                <button
-                                  type="button"
-                                  onClick={() => setAnoSelecionado(ano)}
-                                  className={`h-10 text-xs font-semibold rounded-lg transition-colors border ${anoSelecionado === ano ? "bg-[#D93030] text-white border-[#D93030]" : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"}`}
-                                >
-                                  {ano}
-                                </button>
-                              </PopoverClose>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
+                      <div className="flex flex-col gap-1.5 w-full sm:w-[130px]">
+                        <label className="text-xs font-semibold text-gray-500">
+                          Ano
+                        </label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <div className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-gray-50 text-gray-700">
+                              <span>{anoSelecionado}</span>
+                              <span className="text-xs text-gray-400">▼</span>
+                            </div>
+                          </PopoverTrigger>
+                          <PopoverContent className="p-3 bg-white border border-gray-200 rounded-xl shadow-xl w-[210px] z-50">
+                            <div className="grid grid-cols-3 gap-2">
+                              {anosDisponiveis.map((ano) => (
+                                <PopoverClose key={ano} asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAnoSelecionado(ano)}
+                                    className={`h-10 text-xs font-semibold rounded-lg transition-colors border ${anoSelecionado === ano ? "bg-[#D93030] text-white border-[#D93030]" : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"}`}
+                                  >
+                                    {ano}
+                                  </button>
+                                </PopoverClose>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    )}
 
-                  {/* 3. INPUT EM GRADE: Só um mês (Popover e Grid 4x3) */}
+                  {/* 3. INPUT EM GRADE: Só um mês */}
                   {tipoFiltro === "mes" && (
                     <div className="flex flex-col gap-1.5 w-full sm:w-[150px]">
                       <label className="text-xs font-semibold text-gray-500">
@@ -1427,7 +1379,7 @@ export function TrainingManagement() {
                     </>
                   )}
 
-                  {/* 5. INPUTS EM POPOVER COM VISÃO PREMIUM POR ZOOM OUT (ANO -> MÊS -> DIA) */}
+                  {/* 5. INPUTS EM POPOVER PREMIUM */}
                   {(tipoFiltro === "dia" || tipoFiltro === "personalizado") && (
                     <div className="flex flex-col gap-1.5 w-full sm:w-[170px]">
                       <label className="text-xs font-semibold text-gray-500">
@@ -1441,9 +1393,9 @@ export function TrainingManagement() {
                             <span>
                               {dataInicioCustom
                                 ? format(
-                                    new Date(dataInicioCustom + "T00:00:00"),
-                                    "dd/MM/yyyy",
-                                  )
+                                  new Date(dataInicioCustom + "T00:00:00"),
+                                  "dd/MM/yyyy",
+                                )
                                 : "dd/mm/aaaa"}
                             </span>
                             <span className="text-xs text-gray-400">📅</span>
@@ -1473,9 +1425,9 @@ export function TrainingManagement() {
                             <span>
                               {dataFimCustom
                                 ? format(
-                                    new Date(dataFimCustom + "T00:00:00"),
-                                    "dd/MM/yyyy",
-                                  )
+                                  new Date(dataFimCustom + "T00:00:00"),
+                                  "dd/MM/yyyy",
+                                )
                                 : "dd/mm/aaaa"}
                             </span>
                             <span className="text-xs text-gray-400">📅</span>
@@ -1539,8 +1491,8 @@ export function TrainingManagement() {
                       value={
                         dashboardData?.totalLojasCadastradas > 0
                           ? ((dashboardData?.totalLojasImpactadas ?? 0) /
-                              dashboardData.totalLojasCadastradas) *
-                            100
+                            dashboardData.totalLojasCadastradas) *
+                          100
                           : 0
                       }
                       className="h-1.5 mt-4 bg-gray-100"
@@ -1599,32 +1551,30 @@ export function TrainingManagement() {
                     <div className="flex flex-col justify-between flex-1 gap-y-3">
                       {(dashboardData?.topEngajamento ?? []).length > 0 ? (
                         (dashboardData?.topEngajamento ?? []).map(
-                          (loja: any, i: number) => {
-                            return (
-                              <div
-                                key={i}
-                                className="flex items-center justify-between p-1"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-sm font-bold text-gray-700">
-                                    {i + 1}
+                          (loja: any, i: number) => (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between p-1"
+                            >
+                              <div className="flex items-center gap-4">
+                                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-sm font-bold text-gray-700">
+                                  {i + 1}
+                                </span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {loja.name}
                                   </span>
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-semibold text-gray-900">
-                                      {loja.name}
-                                    </span>
-                                    <span className="text-xs text-slate-500">
-                                      {loja.total}{" "}
-                                      {loja.total === 1
-                                        ? "treinamento"
-                                        : "treinamentos"}{" "}
-                                      no período
-                                    </span>
-                                  </div>
+                                  <span className="text-xs text-slate-500">
+                                    {loja.total}{" "}
+                                    {loja.total === 1
+                                      ? "treinamento"
+                                      : "treinamentos"}{" "}
+                                    no período
+                                  </span>
                                 </div>
                               </div>
-                            );
-                          },
+                            </div>
+                          ),
                         )
                       ) : (
                         <p className="text-sm text-gray-500 text-center py-4 my-auto">
@@ -1690,7 +1640,6 @@ export function TrainingManagement() {
                 </CardHeader>
                 <CardContent>
                   <div className="h-[300px] w-full mt-4">
-                    {/* MODIFICADO: Valida e exibe os dados reais do Go */}
                     {(dashboardData?.evolucaoMensal ?? []).length > 0 ? (
                       <ResponsiveContainer
                         key={`rc-${tipoFiltro}-${anoSelecionado}`}
@@ -1765,11 +1714,11 @@ export function TrainingManagement() {
                 </CardContent>
               </Card>
 
-              {/* Store Explorer — dados reais da API com filtro de período reativo */}
+              {/* Store Explorer */}
               <StoreExplorer
                 dataInicio={periodoDataInicio}
                 dataFim={periodoDataFim}
-                trainings={periodTrainings}
+                trainings={trainingsList}
                 onSelectStore={(loja) => setSelectedStore(loja)}
               />
             </div>
