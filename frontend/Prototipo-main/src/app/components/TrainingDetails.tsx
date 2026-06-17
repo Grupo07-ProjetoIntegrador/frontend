@@ -35,7 +35,7 @@ export interface TrainingDetailsProps {
 export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSettings, onEditTraining }: TrainingDetailsProps) {
   console.log("👀 Dados brutos do Treinamento que chegaram no Details:", training);
   
-  const API_BASE_URL = "http://localhost:8080";
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://jpmallflamboyant.live/api";
   const now = new Date();
   const isConcluido = training.dataHora ? new Date(training.dataHora) < now : false;
   const isAgendado = training.dataHora ? new Date(training.dataHora) > now : false;
