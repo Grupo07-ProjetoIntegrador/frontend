@@ -41,7 +41,7 @@ type DisparoDestinatario = {
 };
 
 export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsProps) {
-  const API_BASE_URL = "http://localhost:8080";
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
   const [formLinks, setFormLinks] = useState({ view: "", edit: "" });
   const [formCreator, setFormCreator] = useState({ name: "", email: "" });
   const [isFormLoading, setIsFormLoading] = useState(false);
