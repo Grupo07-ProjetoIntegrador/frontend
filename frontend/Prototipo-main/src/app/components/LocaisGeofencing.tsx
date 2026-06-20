@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card";
 import { toast } from "sonner";
 
-const API_BASE_URL = "http://localhost:8080";
+const API_BASE_URL = "https://jpmallflamboyant.live/api";
 
 type LocalGeofence = {
   id?: string;

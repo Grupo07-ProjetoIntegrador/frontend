@@ -52,7 +52,7 @@ export function ProfilePage() {
   // Load registered geofencing points
   const carregarLocais = async () => {
     try {
-      const res = await fetch("http://localhost:8080/api/locais");
+      const res = await fetch("https://jpmallflamboyant.live/api/api/locais");
       if (res.ok) {
         const data = await res.json();
         setLocais(data || []);
@@ -166,7 +166,7 @@ export function ProfilePage() {
 
     setIsSavingLocal(true);
     try {
-      const response = await fetch("http://localhost:8080/api/locais/cadastrar", {
+      const response = await fetch("https://jpmallflamboyant.live/api/api/locais/cadastrar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,7 +195,7 @@ export function ProfilePage() {
 
   const connectUrl = useMemo(() => {
     if (!profile) return "";
-    return `http://localhost:8080/api/oauth/google/start?user_id=${profile.user_id}`;
+    return `https://jpmallflamboyant.live/api/api/oauth/google/start?user_id=${profile.user_id}`;
   }, [profile]);
 
   useEffect(() => {
@@ -253,7 +253,7 @@ export function ProfilePage() {
       }
 
       try {
-        const response = await fetch(`http://localhost:8080/api/oauth/google/status?user_id=${user.id}`);
+        const response = await fetch(`https://jpmallflamboyant.live/api/api/oauth/google/status?user_id=${user.id}`);
         if (response.ok) {
           const payload = await response.json();
           setOauthStatus(payload.connected ? "connected" : "disconnected");
@@ -329,7 +329,7 @@ export function ProfilePage() {
     setIsDisconnecting(true);
 
     try {
-      const response = await fetch(`http://localhost:8080/api/oauth/google/disconnect?user_id=${profile.user_id}`, {
+      const response = await fetch(`https://jpmallflamboyant.live/api/api/oauth/google/disconnect?user_id=${profile.user_id}`, {
         method: "DELETE",
       });
 
@@ -353,7 +353,7 @@ export function ProfilePage() {
     setIsDisconnecting(true);
 
     try {
-      const response = await fetch(`http://localhost:8080/api/oauth/google/disconnect?user_id=${profile.user_id}`, {
+      const response = await fetch(`https://jpmallflamboyant.live/api/api/oauth/google/disconnect?user_id=${profile.user_id}`, {
         method: "DELETE",
       });
 

@@ -122,7 +122,7 @@ export function StoreDetails({
       setLoadError("");
 
       try {
-        const response = await fetch(`http://localhost:8080/api/lojas/historico?id=${idParaBackend}`);
+        const response = await fetch(`https://jpmallflamboyant.live/api/api/lojas/historico?id=${idParaBackend}`);
         if (!response.ok) {
           throw new Error(`Erro HTTP: ${response.status}`);
         }

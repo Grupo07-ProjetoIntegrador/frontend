@@ -4,7 +4,7 @@ import { CheckCircle2, Loader2, Mail, MapPin, ShieldAlert, Sparkles } from "luci
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import figmaAsset from "../../imports/logo_2024-1.png";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://jpmallflamboyant.live/api";
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
   const raioTerra = 6371000;
