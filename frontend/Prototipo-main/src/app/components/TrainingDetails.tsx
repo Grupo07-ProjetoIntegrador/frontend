@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { supabase } from "../lib/supabaseClient";
+import { API_BASE_URL } from "../lib/config";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +36,6 @@ export interface TrainingDetailsProps {
 export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSettings, onEditTraining }: TrainingDetailsProps) {
   console.log("👀 Dados brutos do Treinamento que chegaram no Details:", training);
   
-  const API_BASE_URL = "https://jpmallflamboyant.live/api";
   const now = new Date();
   const isConcluido = training.dataHora ? new Date(training.dataHora) < now : false;
   const isAgendado = training.dataHora ? new Date(training.dataHora) > now : false;
@@ -51,7 +51,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
       const sessionRes = await supabase.auth.getSession();
       const token = sessionRes.data.session?.access_token || "";
 
-      const url = `https://jpmallflamboyant.live/api/relatorios/treinamento/chamada?treinamento_id=${training.id}`;
+      const url = `${API_BASE_URL}/api/relatorios/treinamento/chamada?treinamento_id=${training.id}`;
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -107,7 +107,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
       // 1. Mostra qual ID o React está tentando buscar
       console.log("🔎 Buscando presenças para o treinamento ID:", training.id);
       
-      const response = await fetch(`https://jpmallflamboyant.live/api/treinamentos/presencas?treinamento_id=${training.id}&_t=${Date.now()}`);
+      const response = await fetch(`${API_BASE_URL}/api/treinamentos/presencas?treinamento_id=${training.id}&_t=${Date.now()}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -144,7 +144,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
     formData.append("planilha", file);
 
     try {
-      const response = await fetch(`https://jpmallflamboyant.live/api/treinamentos/upload?treinamento_id=${training.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/treinamentos/upload?treinamento_id=${training.id}`, {
         method: "POST",
         body: formData,
       });
@@ -366,7 +366,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
 
     try {
       // Envia os dados estruturados para o backend em Go
-      const response = await fetch("https://jpmallflamboyant.live/api/api/treinamentos/presencas/manual", {
+      const response = await fetch(`${API_BASE_URL}/api/treinamentos/presencas/manual`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -403,7 +403,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
 
   const handleRemoveAttendee = async (id: string | number) => {
     try {
-      const response = await fetch(`https://jpmallflamboyant.live/api/api/treinamentos/presencas/deletar?id=${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/treinamentos/presencas/deletar?id=${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -433,7 +433,7 @@ export function TrainingDetails({ training, onBack, onUpdateAttendance, onOpenSe
 
   //   try {
   //     // 2. Faz a requisição DELETE para a nova rota do seu Go
-  //     const response = await fetch(`https://jpmallflamboyant.live/api/api/treinamentos/presencas/deletar?id=${id}`, {
+  //     const response = await fetch(`${API_BASE_URL}/api/treinamentos/presencas/deletar?id=${id}`, {
   //       method: "DELETE",
   //       headers: {
   //         "Content-Type": "application/json",

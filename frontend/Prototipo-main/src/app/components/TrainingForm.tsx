@@ -692,6 +692,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { ScrollArea } from "./ui/scroll-area";
+import { API_BASE_URL } from "../lib/config";
 
 interface FormValues {
   tema: string;
@@ -722,7 +723,7 @@ interface TrainingFormProps {
   initialData?: FormValues | any;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://jpmallflamboyant.live/api";
+
 
 const toBrazilianDate = (date: string) => {
   if (!date) return "";

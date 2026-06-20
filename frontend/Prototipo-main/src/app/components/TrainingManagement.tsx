@@ -89,8 +89,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://jpmallflamboyant.live/api";
+import { API_BASE_URL } from "../lib/config";
 
 type ApiTraining = {
   id: string;

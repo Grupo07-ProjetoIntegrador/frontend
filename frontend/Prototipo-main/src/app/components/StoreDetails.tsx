@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
+import { API_BASE_URL, AUTOMACAO_BASE_URL } from "../lib/config";
 import {
   ArrowLeft,
   Calendar,
@@ -122,7 +123,7 @@ export function StoreDetails({
       setLoadError("");
 
       try {
-        const response = await fetch(`https://jpmallflamboyant.live/api/api/lojas/historico?id=${idParaBackend}`);
+        const response = await fetch(`${API_BASE_URL}/api/lojas/historico?id=${idParaBackend}`);
         if (!response.ok) {
           throw new Error(`Erro HTTP: ${response.status}`);
         }
@@ -214,7 +215,7 @@ export function StoreDetails({
         historico_treinamentos: historicoList,
       };
 
-      const response = await fetch("http://localhost:8000/api/automacoes/pdf/dossie", {
+      const response = await fetch(`${AUTOMACAO_BASE_URL}/api/automacoes/pdf/dossie`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -3,8 +3,7 @@ import { useSearchParams } from "react-router";
 import { CheckCircle2, Loader2, Mail, MapPin, ShieldAlert, Sparkles } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import figmaAsset from "../../imports/logo_2024-1.png";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://jpmallflamboyant.live/api";
+import { API_BASE_URL } from "../lib/config";
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
   const raioTerra = 6371000;

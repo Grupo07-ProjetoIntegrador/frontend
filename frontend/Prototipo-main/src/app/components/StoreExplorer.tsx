@@ -14,6 +14,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Search, Hash, Store, Loader2, AlertCircle, ChevronRight } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { API_BASE_URL } from "../lib/config";
 import {
   Card,
   CardHeader,
@@ -30,8 +31,6 @@ import {
   TableRow,
 } from "./ui/table";
 import { cn } from "./ui/utils";
-
-const API_BASE_URL = "https://jpmallflamboyant.live/api";
 
 // ──────────────────────────────────────────────
 // Tipos

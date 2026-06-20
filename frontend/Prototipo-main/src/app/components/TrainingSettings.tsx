@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./ui/alert-dialog";
+import { API_BASE_URL } from "../lib/config";
 
 export interface TrainingSettingsProps {
   training: {
@@ -41,7 +42,6 @@ type DisparoDestinatario = {
 };
 
 export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsProps) {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://jpmallflamboyant.live/api";
   const [formLinks, setFormLinks] = useState({ view: "", edit: "" });
   const [formCreator, setFormCreator] = useState({ name: "", email: "" });
   const [isFormLoading, setIsFormLoading] = useState(false);

@@ -4,8 +4,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card";
 import { toast } from "sonner";
-
-const API_BASE_URL = "https://jpmallflamboyant.live/api";
+import { API_BASE_URL } from "../lib/config";
 
 type LocalGeofence = {
   id?: string;
