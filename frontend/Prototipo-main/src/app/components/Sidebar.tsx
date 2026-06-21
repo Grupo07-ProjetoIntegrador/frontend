@@ -20,7 +20,7 @@ import {
 import { supabase } from "../lib/supabaseClient";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+  { label: "Dashboard", icon: LayoutDashboard },
   { label: "Lojistas", icon: Store },
   { label: "Treinamentos", icon: GraduationCap, path: "/treinamentos" },
   { label: "Seguros", icon: ShieldCheck },
@@ -116,7 +116,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = item.path ? location.pathname === item.path : false;
+            const isActive = item.path
+              ? (item.path === "/treinamentos"
+                  ? (location.pathname === "/treinamentos" || location.pathname === "/")
+                  : location.pathname === item.path)
+              : false;
             const className = `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer text-left ${isActive
               ? "bg-white/15 text-white"
               : "text-white/70 hover:bg-white/10 hover:text-white"

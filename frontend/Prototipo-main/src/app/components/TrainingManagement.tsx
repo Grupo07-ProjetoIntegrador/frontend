@@ -278,6 +278,25 @@ export function TrainingManagement() {
   const itemsPerPage = 10;
   const [dashboardData, setDashboardData] = useState<any>(null);
 
+  const handleSelectStore = (loja: LojaExplorador | null) => {
+    setSelectedStore(loja);
+    if (loja) {
+      sessionStorage.setItem("flamboyant.selectedStore", JSON.stringify(loja));
+    } else {
+      sessionStorage.removeItem("flamboyant.selectedStore");
+    }
+  };
+
+  const handleSetActiveTab = (tab: string) => {
+    setActiveTab(tab);
+    sessionStorage.setItem("flamboyant.activeTab", tab);
+  };
+
+  const handleSetViewMode = (mode: "list" | "calendar") => {
+    setViewMode(mode);
+    sessionStorage.setItem("flamboyant.viewMode", mode);
+  };
+
   const [tipoFiltro, setTipoFiltro] = useState<string>("ano");
   const [anoSelecionado, setAnoSelecionado] = useState<number>(2026);
   const [mesSelecionado, setMesSelecionado] = useState<string>("01");
@@ -329,8 +348,44 @@ export function TrainingManagement() {
 
   useEffect(() => {
     carregarTreinamentos();
+    if (typeof window !== "undefined") {
+      const savedTab = sessionStorage.getItem("flamboyant.activeTab");
+      if (savedTab) {
+        setActiveTab(savedTab);
+      }
+      const savedViewMode = sessionStorage.getItem("flamboyant.viewMode");
+      if (savedViewMode === "list" || savedViewMode === "calendar") {
+        setViewMode(savedViewMode);
+      }
+      const savedStore = sessionStorage.getItem("flamboyant.selectedStore");
+      if (savedStore) {
+        try {
+          setSelectedStore(JSON.parse(savedStore));
+        } catch (e) {
+          console.error("Erro ao restaurar loja do sessionStorage:", e);
+        }
+      }
+    }
   }, []);
 
+  // Restaura a rota após F5: se havia um treinamento selecionado, re-seleciona ele assim que a lista carregar
+  useEffect(() => {
+    if (trainingsList.length === 0) return;
+
+    const savedId = sessionStorage.getItem("flamboyant.selectedTrainingId");
+    const savedView = sessionStorage.getItem("flamboyant.selectedView");
+
+    if (savedId && savedView) {
+      const found = trainingsList.find((t) => String(t.id) === savedId);
+      if (found) {
+        if (savedView === "details") {
+          setSelectedTraining(found);
+        } else if (savedView === "settings") {
+          setSelectedTrainingSettings(found);
+        }
+      }
+    }
+  }, [trainingsList]);
   // ─── Derivação reativa do período selecionado ───
   const periodoDataInicio: string = (() => {
     if (tipoFiltro === "ano") return `${anoSelecionado}-01-01`;
@@ -515,14 +570,25 @@ export function TrainingManagement() {
 
   const openSettingsPage = (training: any) => {
     setEditingTraining(null);
-    setSelectedTraining(training);
+    setSelectedTraining(null);       // Garante que TrainingDetails NÃO seja renderizado
     setSelectedTrainingSettings(training);
+    sessionStorage.setItem("flamboyant.selectedTrainingId", String(training.id));
+    sessionStorage.setItem("flamboyant.selectedView", "settings");
   };
 
   const openEditingPage = (training: any) => {
     setSelectedTraining(null);
     setSelectedTrainingSettings(null);
     setEditingTraining(training);
+    sessionStorage.removeItem("flamboyant.selectedTrainingId");
+    sessionStorage.removeItem("flamboyant.selectedView");
+  };
+
+  // Seleciona um treinamento para ver detalhes e persiste o ID na sessão (para F5 não perder a rota)
+  const selectTrainingDetails = (training: any) => {
+    setSelectedTraining(training);
+    sessionStorage.setItem("flamboyant.selectedTrainingId", String(training.id));
+    sessionStorage.setItem("flamboyant.selectedView", "details");
   };
 
   const filterOptions: {
@@ -626,7 +692,7 @@ export function TrainingManagement() {
                   return (
                     <button
                       key={t.id}
-                      onClick={() => setSelectedTraining(t)}
+                      onClick={() => selectTrainingDetails(t)}
                       className={cn(
                         "text-left px-2 py-1 text-xs rounded-md border flex items-center gap-1.5 w-full truncate transition-colors",
                         pillClass,
@@ -650,7 +716,11 @@ export function TrainingManagement() {
     return (
       <TrainingDetails
         training={selectedTraining}
-        onBack={() => setSelectedTraining(null)}
+        onBack={() => {
+          setSelectedTraining(null);
+          sessionStorage.removeItem("flamboyant.selectedTrainingId");
+          sessionStorage.removeItem("flamboyant.selectedView");
+        }}
         onOpenSettings={() => openSettingsPage(selectedTraining)}
         onEditTraining={() => openEditingPage(selectedTraining)}
         onUpdateAttendance={(id, list) => {
@@ -683,8 +753,8 @@ export function TrainingManagement() {
         store={storeForDetails}
         trainings={trainingsList}
         onBack={() => {
-          setSelectedStore(null);
-          setActiveTab("dashboard");
+          handleSelectStore(null);
+          handleSetActiveTab("dashboard");
         }}
         onSelectTraining={(training) => setSelectedTraining(training)}
         defaultDataInicio={periodoDataInicio}
@@ -697,7 +767,11 @@ export function TrainingManagement() {
     return (
       <TrainingSettings
         training={selectedTrainingSettings}
-        onBack={() => setSelectedTrainingSettings(null)}
+        onBack={() => {
+          setSelectedTrainingSettings(null);
+          sessionStorage.removeItem("flamboyant.selectedTrainingId");
+          sessionStorage.removeItem("flamboyant.selectedView");
+        }}
         onEdit={() => openEditingPage(selectedTrainingSettings)}
       />
     );
@@ -740,7 +814,7 @@ export function TrainingManagement() {
       >
         <Tabs
           value={activeTab}
-          onValueChange={setActiveTab}
+          onValueChange={handleSetActiveTab}
           className="flex-1 flex flex-col w-full h-full"
         >
           {/* Header */}
@@ -786,7 +860,7 @@ export function TrainingManagement() {
             <div className="px-4 md:px-8 mb-4 flex flex-col md:flex-row items-center gap-3 w-full justify-between">
               <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button
-                  onClick={() => setViewMode("list")}
+                  onClick={() => handleSetViewMode("list")}
                   className={cn(
                     "px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-colors",
                     viewMode === "list"
@@ -797,7 +871,7 @@ export function TrainingManagement() {
                   <List className="w-4 h-4" /> Lista
                 </button>
                 <button
-                  onClick={() => setViewMode("calendar")}
+                  onClick={() => handleSetViewMode("calendar")}
                   className={cn(
                     "px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-colors",
                     viewMode === "calendar"
@@ -971,7 +1045,7 @@ export function TrainingManagement() {
                               >
                                 <td
                                   className="px-6 py-4 cursor-pointer text-center"
-                                  onClick={() => setSelectedTraining(row)}
+                                  onClick={() => selectTrainingDetails(row)}
                                 >
                                   <span className="text-sm font-medium text-gray-800">
                                     {row.tema}
@@ -979,7 +1053,7 @@ export function TrainingManagement() {
                                 </td>
                                 <td
                                   className="px-6 py-4 cursor-pointer text-center"
-                                  onClick={() => setSelectedTraining(row)}
+                                  onClick={() => selectTrainingDetails(row)}
                                 >
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                                     {row.segmento ||
@@ -988,7 +1062,7 @@ export function TrainingManagement() {
                                 </td>
                                 <td
                                   className="px-6 py-4 cursor-pointer text-center"
-                                  onClick={() => setSelectedTraining(row)}
+                                  onClick={() => selectTrainingDetails(row)}
                                 >
                                   <span className="inline-flex items-center justify-center gap-1.5 text-sm text-gray-600 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors">
                                     <Calendar className="w-3 h-3" /> {row.data}{" "}
@@ -997,7 +1071,7 @@ export function TrainingManagement() {
                                 </td>
                                 <td
                                   className="px-6 py-4 cursor-pointer text-center"
-                                  onClick={() => setSelectedTraining(row)}
+                                  onClick={() => selectTrainingDetails(row)}
                                 >
                                   <span className="text-sm text-gray-500 hover:text-gray-700 transition-colors line-clamp-2 md:line-clamp-none">
                                     {row.conteudo}
@@ -1005,7 +1079,7 @@ export function TrainingManagement() {
                                 </td>
                                 <td
                                   className="px-6 py-4 text-center cursor-pointer"
-                                  onClick={() => setSelectedTraining(row)}
+                                  onClick={() => selectTrainingDetails(row)}
                                 >
                                   <div className="flex justify-center items-center">
                                     {status === "concluido" && (
@@ -1080,7 +1154,7 @@ export function TrainingManagement() {
                           <div
                             key={row.id}
                             className={`p-4 border-b border-gray-100 active:bg-gray-50 transition-colors cursor-pointer ${idx === currentItems.length - 1 ? "border-b-0" : ""}`}
-                            onClick={() => setSelectedTraining(row)}
+                            onClick={() => selectTrainingDetails(row)}
                           >
                             <div className="flex justify-between items-start mb-2 gap-3">
                               <div>
@@ -1718,7 +1792,7 @@ export function TrainingManagement() {
                 dataInicio={periodoDataInicio}
                 dataFim={periodoDataFim}
                 trainings={trainingsList}
-                onSelectStore={(loja) => setSelectedStore(loja)}
+                onSelectStore={(loja) => handleSelectStore(loja)}
               />
             </div>
           </TabsContent>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { CheckCircle2, Loader2, Mail, MapPin, ShieldAlert, Sparkles } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-import figmaAsset from "../../imports/logo_2024-1.png";
+import figmaAsset from "../../imports/logo_2024_(1).png";
 import { API_BASE_URL } from "../lib/config";
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -102,43 +102,53 @@ export function AutocheckinPage() {
     setLocationState("searching");
     setLocationMessage("Verificando sua distância até o local...");
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const uLat = position.coords.latitude;
-        const uLon = position.coords.longitude;
+    // Função de verificação de posição
+    const verificarPosicao = () => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const uLat = position.coords.latitude;
+          const uLon = position.coords.longitude;
 
-        // Salva no estado para usar no POST posterior
-        setUserCoords({ lat: uLat, lon: uLon });
+          // Salva no estado para usar no POST posterior
+          setUserCoords({ lat: uLat, lon: uLon });
 
-        const distancia = calcularDistancia(
-          uLat,
-          uLon,
-          dadosGeofence.latitude,
-          dadosGeofence.longitude
-        );
+          const distancia = calcularDistancia(
+            uLat,
+            uLon,
+            dadosGeofence.latitude,
+            dadosGeofence.longitude
+          );
 
-        if (distancia <= dadosGeofence.raio_amplitude) {
-          setLocationState("success");
-          setLocationMessage(`Localização confirmada em: ${dadosGeofence.nome_local}.`);
-          setIsLocationValid(true);
-          return;
-        }
+          if (distancia <= dadosGeofence.raio_amplitude) {
+            setLocationState("success");
+            setLocationMessage(`Localização confirmada em: ${dadosGeofence.nome_local}.`);
+            setIsLocationValid(true);
+            return;
+          }
 
-        setLocationState("error");
-        setLocationMessage(`Fora do perímetro (Distância: ${distancia.toFixed(0)}m).`);
-        setIsLocationValid(false);
-        setFeedback({
-          type: "error",
-          message: `Você precisa estar fisicamente no(a) ${dadosGeofence.nome_local} para efetuar o check-in.`,
-        });
-      },
-      (error) => {
-        setLocationState("error");
-        setLocationMessage("Não foi possível obter o sinal do seu GPS.");
-        setIsLocationValid(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+          setLocationState("error");
+          setLocationMessage(`Fora do perímetro (Distância: ${distancia.toFixed(0)}m).`);
+          setIsLocationValid(false);
+          setFeedback({
+            type: "error",
+            message: `Você precisa estar fisicamente no(a) ${dadosGeofence.nome_local} para efetuar o check-in.`,
+          });
+        },
+        (error) => {
+          setLocationState("error");
+          setLocationMessage("Não foi possível obter o sinal do seu GPS.");
+          setIsLocationValid(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    };
+
+    verificarPosicao();
+
+    // Executa validação de geocerca em background periodicamente a cada 10 segundos
+    const intervalId = setInterval(verificarPosicao, 10000);
+
+    return () => clearInterval(intervalId);
   }, [treinamentoId, dadosGeofence, isLoadingDados]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {

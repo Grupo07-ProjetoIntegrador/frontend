@@ -5,11 +5,13 @@ import { Menu } from "lucide-react";
 import { Toaster } from "sonner";
 import { ImageWithFallback } from "./components/figma/ImageWithFallback";
 import figmaAsset from "../imports/logo_2024-1.png";
-import { Outlet, useLocation } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import { supabase } from "./lib/supabaseClient";
 
 export default function Root() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
+  const navigate = useNavigate();
   const LOCAL_TEST_STORAGE_KEY = "flamboyant.auth.test_mode";
   const [localTestActive, setLocalTestActive] = useState<boolean>(false);
 
@@ -27,6 +29,24 @@ export default function Root() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  // Guarda de autenticação: redireciona para /auth se não houver sessão válida
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        navigate("/auth", { replace: true });
+      }
+    });
+
+    // Escuta mudanças de sessão (logout, expiração)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        navigate("/auth", { replace: true });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   return (
     <div className="flex min-h-screen w-full overflow-hidden relative" style={{ backgroundColor: "#F7F4EF" }}>

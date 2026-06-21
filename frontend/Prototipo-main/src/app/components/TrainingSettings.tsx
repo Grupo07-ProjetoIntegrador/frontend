@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { ArrowLeft, BookOpen, Calendar, Copy, Download, Edit2, Filter, Link, Mail, Printer, QrCode, Send, Settings2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Calendar, Copy, Download, Edit2, ExternalLink, Filter, Link, Mail, Printer, QrCode, Send, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabaseClient";
 import QRCode from "react-qr-code";
@@ -281,7 +281,7 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
       const mapped: DisparoDestinatario[] = lojas.map((l) => ({ id: l.id, nome: l.nome, email: l.email, segmento: l.segmento || '' }));
       setAllStores(lojas.map((l) => ({ id: l.id, nome: l.nome, email: l.email, segmento: l.segmento })));
       setRecipients(mapped);
-      setSelectedRecipientIds(mapped.map(m => m.id));
+      setSelectedRecipientIds([]); // Nenhuma loja selecionada por padrão ao abrir o modal
       toast.success(`Importadas ${mapped.length} lojas com e-mail.`);
     } catch (e) {
       console.error(e);
@@ -586,7 +586,7 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
     setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
   };
 
-  const renderQrActions = (containerRef: RefObject<HTMLDivElement>, filename: string, title: string) => (
+  const renderQrActions = (containerRef: RefObject<HTMLDivElement>, filename: string, title: string, urlToOpen?: string) => (
     <div className="flex flex-col gap-2 sm:flex-row">
       <button
         onClick={() => downloadQrAsPng(containerRef, filename)}
@@ -602,6 +602,17 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
         <Printer className="h-4 w-4" />
         Imprimir
       </button>
+      {urlToOpen && (
+        <a
+          href={urlToOpen}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Abrir link
+        </a>
+      )}
     </div>
   );
 
@@ -754,7 +765,7 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
 
                   <div className="w-full space-y-3">
                     <p className="break-all text-center text-xs text-gray-500">{autocheckinUrl}</p>
-                    {renderQrActions(autocheckinQrRef, `qr-autocheckin-${training.id}.png`, `QR Code Autocheck-in - ${training.tema}`)}
+                    {renderQrActions(autocheckinQrRef, `qr-autocheckin-${training.id}.png`, `QR Code Autocheck-in - ${training.tema}`, autocheckinUrl)}
                   </div>
                 </div>
               </div>
@@ -781,7 +792,7 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
 
                   <div className="w-full space-y-3">
                     <p className="break-all text-center text-xs text-gray-500">{formLinks.view || "Link indisponível até a geração do formulário."}</p>
-                    {formLinks.view ? renderQrActions(formQrRef, `qr-formulario-${training.id}.png`, `QR Code Formulário - ${training.tema}`) : null}
+                    {formLinks.view ? renderQrActions(formQrRef, `qr-formulario-${training.id}.png`, `QR Code Formulário - ${training.tema}`, formLinks.view) : null}
                   </div>
                 </div>
               </div>
@@ -812,6 +823,15 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
                         <Copy className="w-4 h-4" />
                         Copiar link
                       </button>
+                      <a
+                        href={formLinks.edit}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Abrir link
+                      </a>
                     </div>
                   </div>
                 )}
@@ -830,6 +850,15 @@ export function TrainingSettings({ training, onBack, onEdit }: TrainingSettingsP
                       <Copy className="w-4 h-4" />
                       Copiar link
                     </button>
+                    <a
+                      href={formLinks.view}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Abrir link
+                    </a>
                   </div>
                 </div>
               </div>

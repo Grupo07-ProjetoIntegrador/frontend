@@ -138,13 +138,12 @@ export function DatePickerPremium({
                   const paddingDay = String(day).padStart(2, "0");
                   onChange(`${currentYear}-${paddingMonth}-${paddingDay}`);
                 }}
-                className={`h-8 text-xs font-medium rounded-full flex items-center justify-center transition-colors border ${
-                  isSelected
+                className={`h-8 text-xs font-medium rounded-full flex items-center justify-center transition-colors border ${isSelected
                     ? "bg-[#D93030] text-white border-[#D93030]"
                     : isToday
                       ? "bg-red-50 text-[#D93030] border-red-200"
                       : "bg-white text-gray-700 border-transparent hover:bg-gray-100"
-                }`}
+                  }`}
               >
                 {day}
               </button>
@@ -181,11 +180,10 @@ export function DatePickerPremium({
                 setNavDate(new Date(ano, currentMonth, 1));
                 setViewMode("meses"); // Passa para o próximo passo: escolher o mês!
               }}
-              className={`h-11 text-xs font-semibold rounded-lg transition-colors border ${
-                currentYear === ano
+              className={`h-11 text-xs font-semibold rounded-lg transition-colors border ${currentYear === ano
                   ? "bg-[#D93030] text-white border-[#D93030]"
                   : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"
-              }`}
+                }`}
             >
               {ano}
             </button>
@@ -219,11 +217,10 @@ export function DatePickerPremium({
                 setNavDate(new Date(currentYear, m.cod, 1));
                 setViewMode("dias"); // Retorna para ver os dias daquele mês e ano escolhidos!
               }}
-              className={`h-10 text-xs font-medium rounded-lg transition-colors border ${
-                currentMonth === m.cod
+              className={`h-10 text-xs font-medium rounded-lg transition-colors border ${currentMonth === m.cod
                   ? "bg-[#D93030] text-white border-[#D93030]"
                   : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"
-              }`}
+                }`}
             >
               {m.abrev}
             </button>
