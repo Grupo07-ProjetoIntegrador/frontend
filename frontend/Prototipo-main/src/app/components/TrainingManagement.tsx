@@ -386,6 +386,7 @@ export function TrainingManagement() {
       }
     }
   }, [trainingsList]);
+
   // ─── Derivação reativa do período selecionado ───
   const periodoDataInicio: string = (() => {
     if (tipoFiltro === "ano") return `${anoSelecionado}-01-01`;
@@ -456,8 +457,13 @@ export function TrainingManagement() {
 
   const storeExplorerData = mockStoreData.map((store) => {
     const pastTrainings = trainingsList.filter((t) => {
-      const d = new Date(t.dataHora);
-      return d < new Date() && !t.isCancelado;
+      if (t.isCancelado) return false;
+
+      const trainingDateStr = t.dataHora.split("T")[0];
+      return (
+        trainingDateStr >= periodoDataInicio &&
+        trainingDateStr <= periodoDataFim
+      );
     });
 
     const periodAttendance = pastTrainings
@@ -497,12 +503,16 @@ export function TrainingManagement() {
       .includes(query);
     const matchConteudo = row.conteudo.toLowerCase().includes(query);
     const matchStatus = status.includes(query);
-    const matchData =
+    const matchMatchData =
       row.data.toLowerCase().includes(query) || row.dataHora.includes(query);
 
     if (activeFilter === "todos")
       return (
-        matchTema || matchSegmento || matchConteudo || matchStatus || matchData
+        matchTema ||
+        matchSegmento ||
+        matchConteudo ||
+        matchStatus ||
+        matchMatchData
       );
     if (activeFilter === "tema") return matchTema;
     if (activeFilter === "segmento") return matchSegmento;
@@ -570,9 +580,12 @@ export function TrainingManagement() {
 
   const openSettingsPage = (training: any) => {
     setEditingTraining(null);
-    setSelectedTraining(null);       // Garante que TrainingDetails NÃO seja renderizado
+    setSelectedTraining(null);
     setSelectedTrainingSettings(training);
-    sessionStorage.setItem("flamboyant.selectedTrainingId", String(training.id));
+    sessionStorage.setItem(
+      "flamboyant.selectedTrainingId",
+      String(training.id),
+    );
     sessionStorage.setItem("flamboyant.selectedView", "settings");
   };
 
@@ -584,10 +597,12 @@ export function TrainingManagement() {
     sessionStorage.removeItem("flamboyant.selectedView");
   };
 
-  // Seleciona um treinamento para ver detalhes e persiste o ID na sessão (para F5 não perder a rota)
   const selectTrainingDetails = (training: any) => {
     setSelectedTraining(training);
-    sessionStorage.setItem("flamboyant.selectedTrainingId", String(training.id));
+    sessionStorage.setItem(
+      "flamboyant.selectedTrainingId",
+      String(training.id),
+    );
     sessionStorage.setItem("flamboyant.selectedView", "details");
   };
 
@@ -595,13 +610,13 @@ export function TrainingManagement() {
     key: "todos" | "tema" | "segmento" | "data" | "conteudo" | "status";
     label: string;
   }[] = [
-      { key: "todos", label: "Todos" },
-      { key: "tema", label: "Tema" },
-      { key: "segmento", label: "Segmento" },
-      { key: "data", label: "Data" },
-      { key: "conteudo", label: "Conteúdo" },
-      { key: "status", label: "Status" },
-    ];
+    { key: "todos", label: "Todos" },
+    { key: "tema", label: "Tema" },
+    { key: "segmento", label: "Segmento" },
+    { key: "data", label: "Data" },
+    { key: "conteudo", label: "Conteúdo" },
+    { key: "status", label: "Status" },
+  ];
 
   const handlePrevMonth = () => setCalendarMonth(subMonths(calendarMonth, 1));
   const handleNextMonth = () => setCalendarMonth(addMonths(calendarMonth, 1));
@@ -780,13 +795,13 @@ export function TrainingManagement() {
   if (isCreating || editingTraining) {
     const formData = editingTraining
       ? {
-        ...editingTraining,
-        data: editingTraining.dataHora
-          ? editingTraining.dataHora.split("T")[0]
-          : "",
-        horarioInicio: editingTraining.hora || "",
-        segmento: editingTraining.segmento || "Geral (Todos os Segmentos)",
-      }
+          ...editingTraining,
+          data: editingTraining.dataHora
+            ? editingTraining.dataHora.split("T")[0]
+            : "",
+          horarioInicio: editingTraining.hora || "",
+          segmento: editingTraining.segmento || "Geral (Todos os Segmentos)",
+        }
       : undefined;
     return (
       <TrainingForm
@@ -805,6 +820,32 @@ export function TrainingManagement() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
+  // 🟢 Função para redirecionar o usuário do gráfico direto para o calendário do mês clicado
+  const handleChartBarClick = (data: any) => {
+    if (!data || !data.name) return;
+
+    // Procura o código do mês baseado na abreviação (ex: "Jan" -> "01", "Jun" -> "06")
+    const mesEncontrado = mesesGrid.find(
+      (m) =>
+        m.abrev.toLowerCase() === data.name.toLowerCase() ||
+        m.nome.toLowerCase() === data.name.toLowerCase(),
+    );
+
+    if (mesEncontrado) {
+      // 1. Muda para a aba "Agenda e Lista"
+      handleSetActiveTab("list");
+
+      // 2. Garante que a visualização seja em modo "Calendário"
+      handleSetViewMode("calendar");
+
+      // 3. Move o ponteiro do mês do calendário para o mês correspondente (usando o ano selecionado no topo)
+      const mesIndex = parseInt(mesEncontrado.cod) - 1; // Meses no JavaScript começam em 0
+      setCalendarMonth(new Date(anoSelecionado, mesIndex, 1));
+
+      // Opcional: Se quiser dar um feedback suave na tela
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   return (
     <>
@@ -1019,18 +1060,18 @@ export function TrainingManagement() {
                           {(isLoadingTrainings ||
                             trainingsError ||
                             currentItems.length === 0) && (
-                              <tr>
-                                <td
-                                  colSpan={6}
-                                  className="px-6 py-8 text-center text-sm text-gray-500"
-                                >
-                                  {isLoadingTrainings
-                                    ? "Carregando treinamentos do banco de dados..."
-                                    : trainingsError ||
+                            <tr>
+                              <td
+                                colSpan={6}
+                                className="px-6 py-8 text-center text-sm text-gray-500"
+                              >
+                                {isLoadingTrainings
+                                  ? "Carregando treinamentos do banco de dados..."
+                                  : trainingsError ||
                                     "Nenhum treinamento encontrado."}
-                                </td>
-                              </tr>
-                            )}
+                              </td>
+                            </tr>
+                          )}
                           {currentItems.map((row, idx) => {
                             const dataTreinamento = new Date(row.dataHora);
                             let status = "agendado";
@@ -1137,13 +1178,13 @@ export function TrainingManagement() {
                       {(isLoadingTrainings ||
                         trainingsError ||
                         currentItems.length === 0) && (
-                          <div className="p-6 text-center text-sm text-gray-500">
-                            {isLoadingTrainings
-                              ? "Carregando treinamentos do banco de dados..."
-                              : trainingsError ||
+                        <div className="p-6 text-center text-sm text-gray-500">
+                          {isLoadingTrainings
+                            ? "Carregando treinamentos do banco de dados..."
+                            : trainingsError ||
                               "Nenhum treinamento encontrado."}
-                          </div>
-                        )}
+                        </div>
+                      )}
                       {currentItems.map((row, idx) => {
                         const dataTreinamento = new Date(row.dataHora);
                         let status = "agendado";
@@ -1250,9 +1291,9 @@ export function TrainingManagement() {
                             style={
                               currentPage === page
                                 ? {
-                                  backgroundColor: "#D93030",
-                                  borderColor: "#D93030",
-                                }
+                                    backgroundColor: "#D93030",
+                                    borderColor: "#D93030",
+                                  }
                                 : undefined
                             }
                           >
@@ -1318,35 +1359,35 @@ export function TrainingManagement() {
                   {(tipoFiltro === "ano" ||
                     tipoFiltro === "mes" ||
                     tipoFiltro === "periodo_mes") && (
-                      <div className="flex flex-col gap-1.5 w-full sm:w-[130px]">
-                        <label className="text-xs font-semibold text-gray-500">
-                          Ano
-                        </label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <div className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-gray-50 text-gray-700">
-                              <span>{anoSelecionado}</span>
-                              <span className="text-xs text-gray-400">▼</span>
-                            </div>
-                          </PopoverTrigger>
-                          <PopoverContent className="p-3 bg-white border border-gray-200 rounded-xl shadow-xl w-[210px] z-50">
-                            <div className="grid grid-cols-3 gap-2">
-                              {anosDisponiveis.map((ano) => (
-                                <PopoverClose key={ano} asChild>
-                                  <button
-                                    type="button"
-                                    onClick={() => setAnoSelecionado(ano)}
-                                    className={`h-10 text-xs font-semibold rounded-lg transition-colors border ${anoSelecionado === ano ? "bg-[#D93030] text-white border-[#D93030]" : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"}`}
-                                  >
-                                    {ano}
-                                  </button>
-                                </PopoverClose>
-                              ))}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    )}
+                    <div className="flex flex-col gap-1.5 w-full sm:w-[130px]">
+                      <label className="text-xs font-semibold text-gray-500">
+                        Ano
+                      </label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <div className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-gray-50 text-gray-700">
+                            <span>{anoSelecionado}</span>
+                            <span className="text-xs text-gray-400">▼</span>
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-3 bg-white border border-gray-200 rounded-xl shadow-xl w-[210px] z-50">
+                          <div className="grid grid-cols-3 gap-2">
+                            {anosDisponiveis.map((ano) => (
+                              <PopoverClose key={ano} asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => setAnoSelecionado(ano)}
+                                  className={`h-10 text-xs font-semibold rounded-lg transition-colors border ${anoSelecionado === ano ? "bg-[#D93030] text-white border-[#D93030]" : "bg-white text-gray-700 border-gray-150 hover:bg-gray-50"}`}
+                                >
+                                  {ano}
+                                </button>
+                              </PopoverClose>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
 
                   {/* 3. INPUT EM GRADE: Só um mês */}
                   {tipoFiltro === "mes" && (
@@ -1466,9 +1507,9 @@ export function TrainingManagement() {
                             <span>
                               {dataInicioCustom
                                 ? format(
-                                  new Date(dataInicioCustom + "T00:00:00"),
-                                  "dd/MM/yyyy",
-                                )
+                                    new Date(dataInicioCustom + "T00:00:00"),
+                                    "dd/MM/yyyy",
+                                  )
                                 : "dd/mm/aaaa"}
                             </span>
                             <span className="text-xs text-gray-400">📅</span>
@@ -1498,9 +1539,9 @@ export function TrainingManagement() {
                             <span>
                               {dataFimCustom
                                 ? format(
-                                  new Date(dataFimCustom + "T00:00:00"),
-                                  "dd/MM/yyyy",
-                                )
+                                    new Date(dataFimCustom + "T00:00:00"),
+                                    "dd/MM/yyyy",
+                                  )
                                 : "dd/mm/aaaa"}
                             </span>
                             <span className="text-xs text-gray-400">📅</span>
@@ -1564,8 +1605,8 @@ export function TrainingManagement() {
                       value={
                         dashboardData?.totalLojasCadastradas > 0
                           ? ((dashboardData?.totalLojasImpactadas ?? 0) /
-                            dashboardData.totalLojasCadastradas) *
-                          100
+                              dashboardData.totalLojasCadastradas) *
+                            100
                           : 0
                       }
                       className="h-1.5 mt-4 bg-gray-100"
@@ -1723,6 +1764,17 @@ export function TrainingManagement() {
                           id="participation-chart"
                           data={dashboardData.evolucaoMensal}
                           margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                          onClick={(state) => {
+                            if (
+                              state &&
+                              state.activePayload &&
+                              state.activePayload.length > 0
+                            ) {
+                              handleChartBarClick(
+                                state.activePayload[0].payload,
+                              );
+                            }
+                          }}
                         >
                           <CartesianGrid
                             key="grid"
@@ -1765,6 +1817,7 @@ export function TrainingManagement() {
                             fill="#E5E7EB"
                             radius={[4, 4, 0, 0]}
                             barSize={32}
+                            cursor="pointer"
                             className="hover:opacity-80 transition-opacity"
                           />
                           <Bar
@@ -1774,6 +1827,7 @@ export function TrainingManagement() {
                             fill="#D93030"
                             radius={[4, 4, 0, 0]}
                             barSize={32}
+                            cursor="pointer"
                             className="hover:opacity-80 transition-opacity"
                           />
                         </BarChart>
@@ -1791,7 +1845,6 @@ export function TrainingManagement() {
               <StoreExplorer
                 dataInicio={periodoDataInicio}
                 dataFim={periodoDataFim}
-                trainings={trainingsList}
                 onSelectStore={(loja) => handleSelectStore(loja)}
               />
             </div>

@@ -5,13 +5,24 @@
  *
  * Responsabilidades:
  * - Buscar do backend /api/lojas/explorador?data_inicio=&data_fim= as lojas ativas
- *   com totalTreinamentos e taxaParticipacao já calculados pelo servidor.
- * - Exibir uma tabela filtrável por nome e LUC.
+ * com totalTreinamentos e taxaParticipacao já calculados pelo servidor.
+ * - Exibir uma tabela filtrável por nome, LUC e segmento com paginação numérica de 10 itens.
  * - Ao clicar em uma loja, chama onSelectStore(store, trainings) para navegar ao detalhe.
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { Search, Hash, Store, Loader2, AlertCircle, ChevronRight } from "lucide-react";
+import {
+  Search,
+  Hash,
+  Store,
+  Loader2,
+  AlertCircle,
+  ChevronRight,
+  Tag,
+  ChevronLeft,
+  ChevronsLeft, // 🟢 Ícone para ir para a primeira página
+  ChevronsRight, // 🟢 Ícone para ir para a última página
+} from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { API_BASE_URL } from "../lib/config";
@@ -37,7 +48,7 @@ import { cn } from "./ui/utils";
 // ──────────────────────────────────────────────
 
 export interface LojaExplorador {
-  id: string;        // UUID string do backend (ex: "a1b2-...")
+  id: string; // UUID string do backend (ex: "a1b2-...")
   luc: string;
   nome: string;
   segmento: string;
@@ -58,8 +69,6 @@ interface StoreExplorerProps {
 // Utilitários
 // ──────────────────────────────────────────────
 
-
-
 /** Retorna classe de cor de acordo com o percentual de participação */
 function getParticipacaoColor(pct: number): string {
   if (pct >= 80) return "text-emerald-600";
@@ -73,6 +82,31 @@ function getBarColor(pct: number): string {
   if (pct >= 50) return "bg-amber-400";
   return "bg-[#D93030]";
 }
+
+/** 🟢 Converte "YYYY-MM-DD" para "DD/MM/YYYY" */
+function formatarDataBR(dataStr: string): string {
+  if (!dataStr) return "";
+  const partes = dataStr.split("-");
+  if (partes.length !== 3) return dataStr; // Caso a string não esteja no formato esperado
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+/** 🟢 Função auxiliar para calcular quais números de página devem aparecer */
+const getPageNumbers = (current: number, total: number) => {
+  const maxVisiblePages = 5; // Mostra no máximo 5 números por vez para não quebrar o layout
+  let startPage = Math.max(1, current - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(total, startPage + maxVisiblePages - 1);
+
+  if (endPage - startPage + 1 < maxVisiblePages) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+
+  const pages = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+  return pages;
+};
 
 // ──────────────────────────────────────────────
 // Componente Principal
@@ -88,6 +122,11 @@ export function StoreExplorer({
   const [error, setError] = useState("");
   const [storeSearch, setStoreSearch] = useState("");
   const [lucSearch, setLucSearch] = useState("");
+  const [segmentSearch, setSegmentSearch] = useState("");
+
+  // Estados para controle de Paginação
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const ITENS_POR_PAGINA = 10;
 
   // ── Fetch ─────────────────────────────────────
   const fetchLojas = useCallback(async () => {
@@ -102,10 +141,11 @@ export function StoreExplorer({
       if (!res.ok) throw new Error(`Servidor retornou ${res.status}`);
       const data: LojaExplorador[] = await res.json();
       setLojas(Array.isArray(data) ? data : []);
+      setPaginaAtual(1); // Reseta para a primeira página ao mudar o período de datas
     } catch (err) {
       console.error("StoreExplorer: erro ao buscar lojas:", err);
       setError(
-        "Não foi possível carregar as lojas. Verifique se o backend Go está em execução."
+        "Não foi possível carregar as lojas. Verifique se o backend Go está em execução.",
       );
     } finally {
       setIsLoading(false);
@@ -117,12 +157,27 @@ export function StoreExplorer({
     fetchLojas();
   }, [fetchLojas]);
 
+  // Reseta para a página 1 sempre que o usuário digitar algo nos filtros de busca
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [storeSearch, lucSearch, segmentSearch]);
+
   // ── Filtro local ──────────────────────────────
   const lojasFiltradas = lojas.filter(
     (l) =>
       l.nome.toLowerCase().includes(storeSearch.toLowerCase()) &&
-      l.luc.toLowerCase().includes(lucSearch.toLowerCase())
+      l.luc.toLowerCase().includes(lucSearch.toLowerCase()) &&
+      l.segmento.toLowerCase().includes(segmentSearch.toLowerCase()),
   );
+
+  // Lógica para fatiar (slice) a lista com o que deve aparecer na página atual
+  const totalPaginas = Math.ceil(lojasFiltradas.length / ITENS_POR_PAGINA) || 1;
+  const indiceInicial = (paginaAtual - 1) * ITENS_POR_PAGINA;
+  const indiceFinal = indiceInicial + ITENS_POR_PAGINA;
+  const lojasPaginadas = lojasFiltradas.slice(indiceInicial, indiceFinal);
+
+  // 🟢 Gera a lista de números reativos que vão aparecer na barra
+  const paginasVisiveis = getPageNumbers(paginaAtual, totalPaginas);
 
   // ── Renders ───────────────────────────────────
   const renderContent = () => {
@@ -160,7 +215,7 @@ export function StoreExplorer({
       );
     }
 
-    if (lojasFiltradas.length === 0) {
+    if (lojasPaginadas.length === 0) {
       return (
         <tr>
           <td colSpan={5} className="px-6 py-10 text-center">
@@ -177,7 +232,7 @@ export function StoreExplorer({
       );
     }
 
-    return lojasFiltradas.map((loja) => (
+    return lojasPaginadas.map((loja) => (
       <TableRow
         key={loja.id}
         className="cursor-pointer hover:bg-gray-50 transition-colors group"
@@ -218,7 +273,7 @@ export function StoreExplorer({
             <span
               className={cn(
                 "text-sm font-semibold",
-                getParticipacaoColor(loja.taxaParticipacao)
+                getParticipacaoColor(loja.taxaParticipacao),
               )}
             >
               {loja.taxaParticipacao}%
@@ -227,7 +282,7 @@ export function StoreExplorer({
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-500",
-                  getBarColor(loja.taxaParticipacao)
+                  getBarColor(loja.taxaParticipacao),
                 )}
                 style={{ width: `${loja.taxaParticipacao}%` }}
               />
@@ -256,20 +311,20 @@ export function StoreExplorer({
 
   return (
     <Card className="mt-8 bg-white border-gray-200 shadow-sm">
-      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <CardHeader className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
         <div>
           <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
             <Store className="w-4 h-4 text-[#D93030]" />
             Explorador de Lojas
           </CardTitle>
           <CardDescription>
-            Analise o desempenho e engajamento de cada loja no período
+            Análise o desempenho e engajamento de cada loja no período
             selecionado
           </CardDescription>
         </div>
         {/* Filtros locais */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-44">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+          <div className="relative w-full sm:w-40">
             <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               id="store-explorer-luc-filter"
@@ -279,7 +334,17 @@ export function StoreExplorer({
               className="pl-9 bg-gray-50 border-transparent focus:bg-white text-sm"
             />
           </div>
-          <div className="relative w-full sm:w-60">
+          <div className="relative w-full sm:w-44">
+            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              id="store-explorer-segment-filter"
+              placeholder="Filtrar segmento..."
+              value={segmentSearch}
+              onChange={(e) => setSegmentSearch(e.target.value)}
+              className="pl-9 bg-gray-50 border-transparent focus:bg-white text-sm"
+            />
+          </div>
+          <div className="relative w-full sm:w-52">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               id="store-explorer-name-filter"
@@ -299,12 +364,13 @@ export function StoreExplorer({
             <p className="text-xs text-gray-500">
               Período:{" "}
               <span className="font-medium text-gray-700">
-                {dataInicio} → {dataFim}
+                {formatarDataBR(dataInicio)} → {formatarDataBR(dataFim)}
               </span>
             </p>
             <p className="text-xs text-gray-500">
-              {lojasFiltradas.length} de {lojas.length}{" "}
-              {lojas.length === 1 ? "loja" : "lojas"}
+              Exibindo {indiceInicial + 1}-
+              {Math.min(indiceFinal, lojasFiltradas.length)} de{" "}
+              {lojasFiltradas.length} encontradas
             </p>
           </div>
         )}
@@ -333,6 +399,88 @@ export function StoreExplorer({
             <TableBody>{renderContent()}</TableBody>
           </Table>
         </div>
+
+        {/* 🟢 RODAPÉ: Controles com Números, Atalhos de Primeira e Última Página */}
+        {!isLoading && !error && lojasFiltradas.length > 0 && (
+          <div className="px-6 py-4 bg-white border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span className="text-xs text-gray-500">
+              Página{" "}
+              <span className="font-medium text-gray-700">{paginaAtual}</span>{" "}
+              de{" "}
+              <span className="font-medium text-gray-700">{totalPaginas}</span>
+            </span>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Pular para Primeira Página */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setPaginaAtual(1)}
+                disabled={paginaAtual === 1}
+                className="h-8 w-8 text-gray-600 border-gray-200 disabled:opacity-40"
+                title="Primeira Página"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </Button>
+
+              {/* Página Anterior */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPaginaAtual((prev) => Math.max(prev - 1, 1))}
+                disabled={paginaAtual === 1}
+                className="h-8 px-2 text-gray-600 border-gray-200 disabled:opacity-40 flex items-center gap-1"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Anterior</span>
+              </Button>
+
+              {/* 🟢 RENDERIZAÇÃO DOS NÚMEROS DO BLOCO DINÂMICO */}
+              {paginasVisiveis.map((page) => (
+                <Button
+                  key={page}
+                  variant={paginaAtual === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPaginaAtual(page)}
+                  className={cn(
+                    "h-8 w-8 font-medium transition-all duration-200",
+                    paginaAtual === page
+                      ? "bg-[#D93030] text-white border-[#D93030] hover:bg-[#B82525]"
+                      : "text-gray-600 border-gray-200 hover:bg-gray-50",
+                  )}
+                >
+                  {page}
+                </Button>
+              ))}
+
+              {/* Próxima Página */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas))
+                }
+                disabled={paginaAtual === totalPaginas}
+                className="h-8 px-2 text-gray-600 border-gray-200 disabled:opacity-40 flex items-center gap-1"
+              >
+                <span className="hidden sm:inline">Próximo</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+
+              {/* Pular para Última Página */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setPaginaAtual(totalPaginas)}
+                disabled={paginaAtual === totalPaginas}
+                className="h-8 w-8 text-gray-600 border-gray-200 disabled:opacity-40"
+                title="Última Página"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

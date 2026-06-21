@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { API_BASE_URL, AUTOMACAO_BASE_URL } from "../lib/config";
 import {
   ArrowLeft,
-  Calendar,
+  Calendar as CalendarIcon,
   Store,
   TrendingUp,
   TrendingDown,
@@ -27,16 +27,21 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { cn } from "./ui/utils";
 
+// 🟢 NOVOS IMPORTS: Adicionando o suporte ao componente premium e aos popovers de tela
+import { DatePickerPremium } from "./DatePickerPremium";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Button } from "./ui/button";
+
 export interface StoreDetailsProps {
   store: {
     id: number;
-    lojaId?: string;   // UUID string do backend — usado para exportar o dossiê PDF
+    lojaId?: string; // UUID string do backend — usado para exportar o dossiê PDF
     name: string;
     luc: string;
     segment: string;
     manager: string;
   };
-  trainings: any[];          // Array global (usado apenas como fallback de navegação)
+  trainings: any[]; // Array global (usado apenas como fallback de navegação)
   onBack: () => void;
   onSelectTraining: (training: any) => void;
   defaultDataInicio?: string;
@@ -65,6 +70,14 @@ function normalizarData(raw: string): string {
   return s; // já é YYYY-MM-DD
 }
 
+/** 🟢 Helper para formatar visualmente a string YYYY-MM-DD no padrão brasileiro DD/MM/AAAA */
+function formatarDataBR(dataStr: string): string {
+  if (!dataStr) return "dd/mm/aaaa";
+  const partes = dataStr.split("-");
+  if (partes.length !== 3) return dataStr;
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
 const STATUS_CONFIG = {
   concluido: {
     label: "Concluído",
@@ -88,8 +101,8 @@ const STATUS_CONFIG = {
 interface TreinamentoLoja {
   treinamento_id: string;
   tema: string;
-  data: string;          // YYYY-MM-DD normalizado
-  dataRaw: string;       // valor original do banco para exibição
+  data: string; // YYYY-MM-DD normalizado
+  dataRaw: string; // valor original do banco para exibição
   hora: string;
   presentes: string[];
   ausentes: string[];
@@ -99,7 +112,7 @@ interface TreinamentoLoja {
 
 export function StoreDetails({
   store,
-  trainings,              // mantido para onSelectTraining global (fallback)
+  trainings, // mantido para onSelectTraining global (fallback)
   onBack,
   onSelectTraining,
   defaultDataInicio = "",
@@ -110,7 +123,9 @@ export function StoreDetails({
   const [isExporting, setIsExporting] = useState(false);
 
   // ── Estado dos dados da loja ──────────────────────────────────────────────
-  const [todosOsTreinamentos, setTodosOsTreinamentos] = useState<TreinamentoLoja[]>([]);
+  const [todosOsTreinamentos, setTodosOsTreinamentos] = useState<
+    TreinamentoLoja[]
+  >([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -123,7 +138,9 @@ export function StoreDetails({
       setLoadError("");
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/lojas/historico?id=${idParaBackend}`);
+        const response = await fetch(
+          `${API_BASE_URL}/api/lojas/historico?id=${idParaBackend}`,
+        );
         if (!response.ok) {
           throw new Error(`Erro HTTP: ${response.status}`);
         }
@@ -142,7 +159,10 @@ export function StoreDetails({
 
         setTodosOsTreinamentos(mapped);
       } catch (err: any) {
-        console.error("StoreDetails: erro ao buscar presenças via Go backend:", err);
+        console.error(
+          "StoreDetails: erro ao buscar presenças via Go backend:",
+          err,
+        );
         setLoadError("Não foi possível carregar os dados desta loja.");
       } finally {
         setIsLoadingData(false);
@@ -157,14 +177,15 @@ export function StoreDetails({
     if (!dataInicio || !dataFim) return todosOsTreinamentos;
 
     return todosOsTreinamentos.filter(
-      (t) => t.data >= dataInicio && t.data <= dataFim
+      (t) => t.data >= dataInicio && t.data <= dataFim,
     );
   }, [todosOsTreinamentos, dataInicio, dataFim]);
 
   // Ordena do mais recente para o mais antigo
   const treinamentosOrdenados = useMemo(
-    () => [...treinamentosNoPeriodo].sort((a, b) => b.data.localeCompare(a.data)),
-    [treinamentosNoPeriodo]
+    () =>
+      [...treinamentosNoPeriodo].sort((a, b) => b.data.localeCompare(a.data)),
+    [treinamentosNoPeriodo],
   );
 
   // ── KPIs derivados ────────────────────────────────────────────────────────
@@ -172,15 +193,17 @@ export function StoreDetails({
 
   const totalPresentes = treinamentosOrdenados.reduce(
     (acc, t) => acc + t.presentes.length,
-    0
+    0,
   );
   const totalConvocados = treinamentosOrdenados.reduce(
     (acc, t) => acc + t.presentes.length + t.ausentes.length,
-    0
+    0,
   );
 
   const taxaFrequencia =
-    totalConvocados > 0 ? Math.round((totalPresentes / totalConvocados) * 100) : 0;
+    totalConvocados > 0
+      ? Math.round((totalPresentes / totalConvocados) * 100)
+      : 0;
 
   // ── Export PDF ────────────────────────────────────────────────────────────
   const handleExportPDF = async () => {
@@ -190,7 +213,6 @@ export function StoreDetails({
     }
     setIsExporting(true);
     try {
-      // Monta o histórico a partir dos dados já carregados (sem re-consultar o banco)
       const historicoList = treinamentosOrdenados.map((t) => ({
         tema: t.tema,
         data: t.dataRaw || t.data,
@@ -202,7 +224,6 @@ export function StoreDetails({
         dados_loja: {
           nome: store.name || "",
           name: store.name || "",
-          segmento: store.segment || "",
           segment: store.segment || "",
           luc: store.luc || "",
         },
@@ -215,11 +236,14 @@ export function StoreDetails({
         historico_treinamentos: historicoList,
       };
 
-      const response = await fetch(`${AUTOMACAO_BASE_URL}/api/automacoes/pdf/dossie`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `${AUTOMACAO_BASE_URL}/api/automacoes/pdf/dossie`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -240,30 +264,30 @@ export function StoreDetails({
       toast.success("Dossiê em PDF baixado com sucesso!");
     } catch (err: any) {
       console.error("Erro completo na exportação:", err);
-      toast.error(`Falha ao exportar o PDF: ${err.message || "Erro desconhecido"}`);
+      toast.error(
+        `Falha ao exportar o PDF: ${err.message || "Erro desconhecido"}`,
+      );
     } finally {
       setIsExporting(false);
     }
   };
 
-  // ── Próximo treinamento (agendado) ────────────────────────────────────────
-  // Usa o array global para buscar um agendamento futuro desta loja,
-  // caso exista no array global (compatibilidade com dados do pai).
   const proximoAgendado = useMemo(() => {
     const now = new Date();
-    return [...trainings]
-      .filter((t) => {
-        const dh = new Date(t.dataHora || t.data_hora || 0);
-        return dh > now && !t.isCancelado;
-      })
-      .sort(
-        (a, b) =>
-          new Date(a.dataHora || a.data_hora || 0).getTime() -
-          new Date(b.dataHora || b.data_hora || 0).getTime()
-      )[0] ?? null;
+    return (
+      [...trainings]
+        .filter((t) => {
+          const dh = new Date(t.dataHora || t.data_hora || 0);
+          return dh > now && !t.isCancelado;
+        })
+        .sort(
+          (a, b) =>
+            new Date(a.dataHora || a.data_hora || 0).getTime() -
+            new Date(b.dataHora || b.data_hora || 0).getTime(),
+        )[0] ?? null
+    );
   }, [trainings]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <main
       className="flex-1 min-h-screen flex flex-col"
@@ -316,52 +340,80 @@ export function StoreDetails({
             </div>
           </div>
 
-          {/* Seletor de período */}
-          <div className="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="pdf-start-date"
-                className="text-xs font-semibold text-gray-600 uppercase tracking-wider"
-              >
+          {/* 🟢 SELETOR DE PERÍODO ATUALIZADO: Inputs nativos removidos. Agora usam Popovers com DatePickerPremium */}
+          <div className="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm z-30">
+            {/* Campo DATA INICIAL (DE) */}
+            <div className="flex flex-col gap-1.5 w-full sm:w-[160px]">
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 De
-              </label>
-              <input
-                id="pdf-start-date"
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-all bg-white"
-              />
+              </span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="flex h-10 w-full items-center justify-between bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 border-gray-300 rounded-lg shadow-none"
+                  >
+                    <span className="font-normal">
+                      {formatarDataBR(dataInicio)}
+                    </span>
+                    <CalendarIcon className="h-4 w-4 text-gray-400" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0 bg-white border border-gray-200 rounded-xl shadow-xl z-50"
+                  align="start"
+                >
+                  <DatePickerPremium
+                    value={dataInicio}
+                    onChange={(newDate) => setDataInicio(newDate)}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="pdf-end-date"
-                className="text-xs font-semibold text-gray-600 uppercase tracking-wider"
-              >
+
+            {/* Campo DATA FINAL (ATÉ) */}
+            <div className="flex flex-col gap-1.5 w-full sm:w-[160px]">
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 Até
-              </label>
-              <input
-                id="pdf-end-date"
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-all bg-white"
-              />
+              </span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="flex h-10 w-full items-center justify-between bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 border-gray-300 rounded-lg shadow-none"
+                  >
+                    <span className="font-normal">
+                      {formatarDataBR(dataFim)}
+                    </span>
+                    <CalendarIcon className="h-4 w-4 text-gray-400" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0 bg-white border border-gray-200 rounded-xl shadow-xl z-50"
+                  align="start"
+                >
+                  <DatePickerPremium
+                    value={dataFim}
+                    onChange={(newDate) => setDataFim(newDate)}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
+
             <button
               onClick={handleExportPDF}
               disabled={isExporting || isLoadingData}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all bg-[#C4151F] hover:bg-[#A31219] disabled:opacity-50 min-h-[40px] cursor-pointer"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all bg-[#C4151F] hover:bg-[#A31219] disabled:opacity-50 h-10 cursor-pointer w-full sm:w-auto shrink-0"
             >
               {isExporting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Gerando...
+                  <span>Gerando...</span>
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  Exportar Dossiê PDF
+                  <span>Exportar Dossiê PDF</span>
                 </>
               )}
             </button>
@@ -371,10 +423,8 @@ export function StoreDetails({
 
       {/* ── Conteúdo ───────────────────────────────────────────────────────── */}
       <div className="p-4 md:p-8 flex-1 overflow-y-auto space-y-8">
-
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-
           {/* Taxa de Frequência */}
           <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-1 px-5 pt-5">
@@ -418,7 +468,7 @@ export function StoreDetails({
               <CardTitle className="text-xs font-medium text-gray-600">
                 Treinamentos no Período
               </CardTitle>
-              <Calendar className="h-4 w-4 text-gray-400" />
+              <CalendarIcon className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent className="px-5 pb-5">
               {isLoadingData ? (
@@ -428,9 +478,9 @@ export function StoreDetails({
                   <div className="text-2xl font-bold text-gray-900">
                     {totalTreinamentos}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">
+                  <p className="text-[11px] text-muted-foreground mt-1 font-medium text-gray-700">
                     {dataInicio && dataFim
-                      ? `${dataInicio} → ${dataFim}`
+                      ? `${formatarDataBR(dataInicio)} → ${formatarDataBR(dataFim)}`
                       : "Todos os períodos"}
                   </p>
                 </>
@@ -511,48 +561,71 @@ export function StoreDetails({
                     <TableCell colSpan={4} className="text-center py-12">
                       <div className="flex flex-col items-center gap-2 text-gray-400">
                         <Loader2 className="w-6 h-6 animate-spin" />
-                        <span className="text-sm">Carregando dados da loja...</span>
+                        <span className="text-sm">
+                          Carregando dados da loja...
+                        </span>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : loadError ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-12 text-red-400">
+                    <TableCell
+                      colSpan={4}
+                      className="text-center py-12 text-red-400"
+                    >
                       <p className="text-sm">{loadError}</p>
                     </TableCell>
                   </TableRow>
                 ) : treinamentosOrdenados.length > 0 ? (
                   treinamentosOrdenados.map((treinamento) => {
-                    const totalConv = treinamento.presentes.length + treinamento.ausentes.length;
-                    const pct = totalConv > 0
-                      ? Math.round((treinamento.presentes.length / totalConv) * 100)
-                      : 0;
+                    const totalConv =
+                      treinamento.presentes.length +
+                      treinamento.ausentes.length;
+                    const pct =
+                      totalConv > 0
+                        ? Math.round(
+                            (treinamento.presentes.length / totalConv) * 100,
+                          )
+                        : 0;
 
-                    // Status visual baseado na data
-                    const dataObj = treinamento.data ? new Date(treinamento.data + "T00:00:00") : null;
+                    const dataObj = treinamento.data
+                      ? new Date(treinamento.data + "T00:00:00")
+                      : null;
                     const isFuturo = dataObj ? dataObj > new Date() : false;
-                    const statusKey: keyof typeof STATUS_CONFIG = isFuturo ? "agendado" : "concluido";
-                    const { label, className: statusClass, Icon } = STATUS_CONFIG[statusKey];
+                    const statusKey: keyof typeof STATUS_CONFIG = isFuturo
+                      ? "agendado"
+                      : "concluido";
+                    const {
+                      label,
+                      className: statusClass,
+                      Icon,
+                    } = STATUS_CONFIG[statusKey];
 
-                    // Tenta encontrar o objeto correspondente no array global de trainings
-                    const originalTraining = trainings.find(
-                      (t) => String(t.id) === treinamento.treinamento_id
-                    ) || trainings.find(
-                      (t) => t.tema === treinamento.tema
-                    );
+                    const originalTraining =
+                      trainings.find(
+                        (t) => String(t.id) === treinamento.treinamento_id,
+                      ) || trainings.find((t) => t.tema === treinamento.tema);
 
                     return (
                       <TableRow
                         key={treinamento.treinamento_id}
                         className={cn(
                           "group transition-colors",
-                          originalTraining ? "cursor-pointer hover:bg-gray-50/80" : "hover:bg-gray-50/80"
+                          originalTraining
+                            ? "cursor-pointer hover:bg-gray-50/80"
+                            : "hover:bg-gray-50/80",
                         )}
-                        onClick={originalTraining ? () => onSelectTraining(originalTraining) : undefined}
+                        onClick={
+                          originalTraining
+                            ? () => onSelectTraining(originalTraining)
+                            : undefined
+                        }
                       >
-                        {/* Data */}
+                        {/* Data formatada visualmente para o padrão brasileiro */}
                         <TableCell className="text-gray-600 font-medium whitespace-nowrap px-6">
-                          {treinamento.dataRaw || treinamento.data || "—"}
+                          {formatarDataBR(
+                            treinamento.dataRaw || treinamento.data,
+                          )}
                           {treinamento.hora && (
                             <div className="text-xs text-gray-400 font-normal mt-0.5">
                               {treinamento.hora}
@@ -562,10 +635,12 @@ export function StoreDetails({
 
                         {/* Tema */}
                         <TableCell className="px-6">
-                          <span className={cn(
-                            "font-semibold text-gray-900 leading-snug transition-colors flex items-center gap-1.5",
-                            originalTraining && "group-hover:text-[#C4151F]"
-                          )}>
+                          <span
+                            className={cn(
+                              "font-semibold text-gray-900 leading-snug transition-colors flex items-center gap-1.5",
+                              originalTraining && "group-hover:text-[#C4151F]",
+                            )}
+                          >
                             {treinamento.tema}
                             {originalTraining && (
                               <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
@@ -573,13 +648,19 @@ export function StoreDetails({
                           </span>
                         </TableCell>
 
-                        {/* Presença: X / Y */}
+                        {/* Presença */}
                         <TableCell className="text-center px-6">
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className={cn(
-                              "text-sm font-semibold",
-                              pct >= 70 ? "text-emerald-600" : pct >= 40 ? "text-amber-500" : "text-red-500"
-                            )}>
+                            <span
+                              className={cn(
+                                "text-sm font-semibold",
+                                pct >= 70
+                                  ? "text-emerald-600"
+                                  : pct >= 40
+                                    ? "text-amber-500"
+                                    : "text-red-500",
+                              )}
+                            >
                               {treinamento.presentes.length} / {totalConv}
                             </span>
                             <span className="text-[11px] text-gray-400">
@@ -588,12 +669,12 @@ export function StoreDetails({
                           </div>
                         </TableCell>
 
-                        {/* Badge de status */}
+                        {/* Status */}
                         <TableCell className="text-center px-6">
                           <span
                             className={cn(
                               "inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap",
-                              statusClass
+                              statusClass,
                             )}
                           >
                             <Icon className="w-3 h-3" />
@@ -611,7 +692,8 @@ export function StoreDetails({
                     >
                       <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">
-                        Nenhum treinamento registrado para esta loja no período selecionado.
+                        Nenhum treinamento registrado para esta loja no período
+                        selecionado.
                       </p>
                     </TableCell>
                   </TableRow>
