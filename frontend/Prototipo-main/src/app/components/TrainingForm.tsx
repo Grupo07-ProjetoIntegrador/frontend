@@ -133,7 +133,7 @@ export function TrainingForm({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [locaisList, setLocaisList] = useState<any[]>([]);
 
-  // ── 🟢 NOVOS ESTADOS E REFERÊNCIAS PARA ARQUIVOS ──
+  // Estados e referências para arquivos de suporte
   const [materialArquivo, setMaterialArquivo] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,11 +154,11 @@ export function TrainingForm({
 
   const isEditing = !!initialData;
 
-  // ── 🟢 FUNÇÃO DISPARADA NO SUBMIT ATUALIZADA PARA ENVIAR MULTIPART/FORM-DATA ──
+  // ── 🟢 FUNÇÃO SUBMIT UNIFICADA COM FORMDATA (MULTIPART) PARA CADASTRO E EDIÇÃO ──
   const onSubmit = async (data: FormValues) => {
     const formData = new FormData();
 
-    // Injeta todos os campos de texto no FormData
+    // Mapeamento idêntico dos campos de texto para enviar ao Go
     formData.append("tema", data.tema || "");
     formData.append("descricao", data.conteudo || data.objetivo || "");
     formData.append("categoria", data.categoria || "Geral");
@@ -170,7 +170,7 @@ export function TrainingForm({
     );
     formData.append("local", data.local || "");
     formData.append("local_id", data.local_id || "");
-    formData.append("modalidade", "Presencial"); // Backend espera estático
+    formData.append("modalidade", "Presencial");
     formData.append("conteudo", data.conteudo || "");
     formData.append(
       "capacidade_maxima",
@@ -188,38 +188,18 @@ export function TrainingForm({
     formData.append("tags", data.tags || "");
     formData.append("recorrente", String(!!data.recorrente));
 
-    // Se houver arquivo físico na memória do React, anexa ele no multipart
     if (materialArquivo) {
       formData.append("material_arquivo", materialArquivo);
     }
 
     try {
       if (isEditing) {
-        // Rota de edição mantida como JSON caso o backend de edição não use multipart ainda
+        // 🟢 ALTERADO: Agora envia via PUT usando FormData estruturado (Sem o payload indefinido)
         const response = await fetch(
           `${API_BASE_URL}/api/treinamentos/editar?id=${initialData?.id}`,
           {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              ...payload, // Mapeamento anterior fallback se necessário
-              tema: data.tema,
-              descricao: data.conteudo || data.objetivo || "",
-              categoria: data.categoria || "Geral",
-              data: toBrazilianDate(data.data),
-              horario_inicio: data.horarioInicio || "00:00",
-              horario_fim: data.horarioFim || data.horarioInicio || "00:00",
-              local: data.local,
-              local_id: data.local_id,
-              conteudo: data.conteudo,
-              capacidade_maxima: Number(data.capacidadeMaxima) || 0,
-              status: data.status,
-              objetivo: data.objetivo,
-              observacoes: data.observacoes,
-              area_responsavel: data.areaResponsavel,
-              tags: data.tags,
-              recorrente: !!data.recorrente,
-            }),
+            body: formData, // Deixe o navegador setar o Boundary automaticamente
           },
         );
 
@@ -228,17 +208,17 @@ export function TrainingForm({
           throw new Error(message || "Erro ao editar treinamento");
         }
 
-        toast.success("Treinamento editado com sucesso");
+        toast.success("Treinamento editado com sucesso!");
         onSuccess(data);
         return;
       }
 
-      // 🟢 DISPARO CADASTRO MULTIPART SEGURO PRO GO
+      // Rota de Cadastro de Novo Treinamento
       const response = await fetch(
         `${API_BASE_URL}/api/treinamentos/cadastrar`,
         {
           method: "POST",
-          body: formData, // Sem headers manuais de Content-Type! Deixe o navegador calcular o boundary do Form.
+          body: formData,
         },
       );
 
@@ -247,12 +227,12 @@ export function TrainingForm({
         throw new Error(message || "Erro ao salvar treinamento");
       }
 
-      toast.success("Treinamento cadastrado com sucesso");
+      toast.success("Treinamento cadastrado com sucesso!");
       onSuccess(data);
-    } catch (error) {
-      console.error("Erro ao cadastrar treinamento:", error);
+    } catch (error: any) {
+      console.error("Erro no processamento:", error);
       toast.error(
-        "Não foi possível salvar. Confira se o backend Go está rodando.",
+        error.message || "Não foi possível salvar os dados. Verifique a API.",
       );
     }
   };
@@ -266,7 +246,6 @@ export function TrainingForm({
     onBack();
   };
 
-  // Funções de manipulação de arquivo do dropzone
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0];
@@ -279,7 +258,7 @@ export function TrainingForm({
   };
 
   const handleRemoveFile = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Impede de abrir a janela de seleção ao remover
+    e.stopPropagation();
     setMaterialArquivo(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -659,13 +638,12 @@ export function TrainingForm({
                 />
               </div>
 
-              {/* ── 🟢 INTERFACE DO DROPZONE DO MATERIAL DE APOIO TOTALMENTE REATIVA ── */}
+              {/* Interface do Dropzone */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Material de apoio (Opcional)
                 </label>
 
-                {/* Input nativo invisível que recebe a referência do clique */}
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -684,7 +662,6 @@ export function TrainingForm({
                 >
                   <div className="space-y-2 text-center">
                     {materialArquivo ? (
-                      // Estado Visível quando o arquivo já está carregado na memória do React
                       <div className="flex flex-col items-center animate-in zoom-in-95 duration-200">
                         <div className="mx-auto h-12 w-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mb-2">
                           <FileText className="h-6 w-6" />
@@ -704,7 +681,6 @@ export function TrainingForm({
                         </button>
                       </div>
                     ) : (
-                      // Estado Padrão (Vazio) esperando interação do usuário
                       <>
                         <div className="mx-auto h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-red-50 transition-colors">
                           <UploadCloud className="h-5 w-5 text-gray-400 group-hover:text-[#D93030]" />
@@ -856,12 +832,14 @@ export function TrainingForm({
               </p>
               <div className="flex items-center justify-end gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowCancelModal(false)}
                   className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-200 min-h-[44px]"
                 >
                   Continuar editando
                 </button>
                 <button
+                  type="button"
                   onClick={confirmCancel}
                   className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-red-200 min-h-[44px]"
                   style={{ backgroundColor: "#D93030" }}
