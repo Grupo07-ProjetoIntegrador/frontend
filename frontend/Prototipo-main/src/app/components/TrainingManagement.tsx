@@ -481,7 +481,29 @@ export function TrainingManagement() {
 
   const now = new Date();
 
-  const filteredTrainings = trainingsList.filter((row) => {
+  // Determina o grupo de status de cada treinamento para ordenação
+  const getStatusGroup = (t: any): number => {
+    if (t.isCancelado) return 2; // cancelados por último
+    if (new Date(t.dataHora).getTime() >= now.getTime()) return 0; // agendados primeiro
+    return 1; // concluídos no meio
+  };
+
+  const filteredTrainings = [...trainingsList].sort((a, b) => {
+    const groupA = getStatusGroup(a);
+    const groupB = getStatusGroup(b);
+
+    // Prioriza grupo: agendados (0) → concluídos (1) → cancelados (2)
+    if (groupA !== groupB) return groupA - groupB;
+
+    const dateA = new Date(a.dataHora).getTime();
+    const dateB = new Date(b.dataHora).getTime();
+
+    // Agendados: ASC (o mais próximo de acontecer aparece primeiro)
+    if (groupA === 0) return dateA - dateB;
+
+    // Concluídos e cancelados: DESC (mais recente primeiro)
+    return dateB - dateA;
+  }).filter((row) => {
     if (activeFilter === "data") {
       if (!dateInput) return true;
       const rowDate = new Date(row.dataHora);
@@ -576,6 +598,24 @@ export function TrainingManagement() {
     setIsCreating(false);
     setEditingTraining(null);
     await carregarTreinamentos();
+  };
+
+  // Abre o detalhamento de uma loja pelo nome (usado nos cards Top 5 e Radar de Risco)
+  const handleOpenStoreByName = async (name: string) => {
+    try {
+      const url = `${API_BASE_URL}/api/lojas/explorador?data_inicio=${periodoDataInicio}&data_fim=${periodoDataFim}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const lojas: any[] = await res.json();
+      const loja = lojas.find(
+        (l) => l.nome?.toLowerCase() === name?.toLowerCase()
+      );
+      if (loja) {
+        handleSelectStore(loja as any);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar loja pelo nome:", err);
+    }
   };
 
   const openSettingsPage = (training: any) => {
@@ -783,9 +823,10 @@ export function TrainingManagement() {
       <TrainingSettings
         training={selectedTrainingSettings}
         onBack={() => {
+          setSelectedTraining(selectedTrainingSettings);
           setSelectedTrainingSettings(null);
-          sessionStorage.removeItem("flamboyant.selectedTrainingId");
-          sessionStorage.removeItem("flamboyant.selectedView");
+          sessionStorage.setItem("flamboyant.selectedTrainingId", String(selectedTrainingSettings.id));
+          sessionStorage.setItem("flamboyant.selectedView", "details");
         }}
         onEdit={() => openEditingPage(selectedTrainingSettings)}
       />
@@ -1668,14 +1709,16 @@ export function TrainingManagement() {
                           (loja: any, i: number) => (
                             <div
                               key={i}
-                              className="flex items-center justify-between p-1"
+                              className="flex items-center justify-between p-1 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors group"
+                              onClick={() => handleOpenStoreByName(loja.name)}
+                              title={`Ver detalhes de ${loja.name}`}
                             >
                               <div className="flex items-center gap-4">
-                                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-sm font-bold text-gray-700">
+                                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-sm font-bold text-gray-700 group-hover:bg-red-100 group-hover:text-[#D93030] transition-colors">
                                   {i + 1}
                                 </span>
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-semibold text-gray-900">
+                                  <span className="text-sm font-semibold text-gray-900 group-hover:text-[#D93030] transition-colors">
                                     {loja.name}
                                   </span>
                                   <span className="text-xs text-slate-500">
@@ -1687,6 +1730,7 @@ export function TrainingManagement() {
                                   </span>
                                 </div>
                               </div>
+                              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#D93030] transition-colors" />
                             </div>
                           ),
                         )
@@ -1713,10 +1757,12 @@ export function TrainingManagement() {
                           (loja: any, i: number) => (
                             <div
                               key={i}
-                              className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
+                              className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100 cursor-pointer hover:bg-red-100 hover:border-red-200 transition-colors group"
+                              onClick={() => handleOpenStoreByName(loja.name)}
+                              title={`Ver detalhes de ${loja.name}`}
                             >
                               <div>
-                                <p className="text-sm font-bold text-gray-900">
+                                <p className="text-sm font-bold text-gray-900 group-hover:text-[#D93030] transition-colors">
                                   {loja.name}
                                 </p>
                                 <p className="text-xs text-gray-500 mt-0.5">
@@ -1724,10 +1770,13 @@ export function TrainingManagement() {
                                   {loja.ultimaPresenca || "Nunca"}
                                 </p>
                               </div>
-                              <span className="text-sm font-semibold text-red-500">
-                                {loja.faltas ?? 0}{" "}
-                                {loja.faltas === 1 ? "falta" : "faltas"}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-red-500">
+                                  {loja.faltas ?? 0}{" "}
+                                  {loja.faltas === 1 ? "falta" : "faltas"}
+                                </span>
+                                <ChevronRight className="w-4 h-4 text-red-300 group-hover:text-[#D93030] transition-colors" />
+                              </div>
                             </div>
                           ),
                         )
