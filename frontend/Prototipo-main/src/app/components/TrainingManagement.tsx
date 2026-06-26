@@ -105,6 +105,7 @@ type ApiTraining = {
   descricao?: string;
   categoria?: string;
   local?: string;
+  local_id?: string;
   modalidade?: string;
   objetivo?: string;
   observacoes?: string;
@@ -164,6 +165,7 @@ const normalizeTrainingFromApi = (training: ApiTraining) => {
     horarioFim: training.horario_fim || "",
     dataHora: dataHora || new Date().toISOString(),
     local: training.local || "",
+    local_id: training.local_id || "",
     modalidade: training.modalidade || "Presencial",
     conteudo: training.conteudo || "",
     objetivo: training.objetivo || "",
