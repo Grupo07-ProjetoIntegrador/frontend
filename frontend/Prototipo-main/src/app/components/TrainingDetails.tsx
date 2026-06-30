@@ -123,6 +123,10 @@ export function TrainingDetails({
     representante: "",
     status: "Presente",
   });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingAttendeeId, setEditingAttendeeId] = useState<string | number | null>(null);
+  const [lojasCadastradas, setLojasCadastradas] = useState<{ luc: string; nome: string }[]>([]);
+  const [lojaInputValue, setLojaInputValue] = useState("");
 
   // Estados para Filtros e Paginação
   const [filterLuc, setFilterLuc] = useState("");
@@ -241,6 +245,22 @@ export function TrainingDetails({
       setIsUploading(false);
     }
   };
+
+  // Busca lojas do banco para o autocomplete do modal
+  useEffect(() => {
+    const fetchLojas = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lojas`);
+        if (res.ok) {
+          const data: { luc: string; nome: string }[] = await res.json();
+          setLojasCadastradas(data.filter((l) => l.luc && l.nome));
+        }
+      } catch (err) {
+        console.warn("Falha ao buscar lojas para o autocomplete:", err);
+      }
+    };
+    fetchLojas();
+  }, []);
 
   const idCarregadoRef = useRef<string | number | null>(null);
 
@@ -363,35 +383,48 @@ export function TrainingDetails({
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/treinamentos/presencas/manual`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      const url = isEditing
+        ? `${API_BASE_URL}/api/treinamentos/presencas/editar`
+        : `${API_BASE_URL}/api/treinamentos/presencas/manual`;
+      
+      const body = isEditing
+        ? {
+            id: editingAttendeeId,
+            luc: newAttendee.luc.trim(),
+            representante: newAttendee.representante.trim(),
+            status: newAttendee.status,
+          }
+        : {
             treinamento_id: training.id,
             luc: newAttendee.luc.trim(),
             representante: newAttendee.representante.trim(),
             status: newAttendee.status,
-          }),
-        },
-      );
+          };
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success("Participante adicionado com sucesso!");
+        toast.success(isEditing ? "Participante editado com sucesso!" : "Participante adicionado com sucesso!");
         setNewAttendee({
           luc: "",
           loja: "",
           representante: "",
           status: "Presente",
         });
+        setLojaInputValue("");
         setIsAddModalOpen(false);
+        setIsEditing(false);
+        setEditingAttendeeId(null);
         await new Promise((resolve) => setTimeout(resolve, 300));
         await fetchPresencas();
       } else {
-        toast.error(data.erro || "Falha ao adicionar participante.");
+        toast.error(data.erro || `Falha ao ${isEditing ? "editar" : "adicionar"} participante.`);
       }
     } catch (error) {
       console.error("Erro ao conectar com o servidor:", error);
@@ -715,7 +748,18 @@ export function TrainingDetails({
                   </span>
                 </div>
                 <button
-                  onClick={() => setIsAddModalOpen(true)}
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditingAttendeeId(null);
+                    setNewAttendee({
+                      luc: "",
+                      loja: "",
+                      representante: "",
+                      status: "Presente",
+                    });
+                    setLojaInputValue("");
+                    setIsAddModalOpen(true);
+                  }}
                   className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <Plus className="w-4 h-4" /> Adicionar Manualmente
@@ -824,18 +868,43 @@ export function TrainingDetails({
                             </span>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() =>
-                                setAttendeeToDelete({
-                                  id: attendee.id,
-                                  nome: attendee.representante,
-                                })
-                              }
-                              className="text-gray-400 hover:text-red-600 transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center mx-auto"
-                              title="Remover presença"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1 mx-auto w-fit">
+                              <button
+                                onClick={() => {
+                                  setIsEditing(true);
+                                  setEditingAttendeeId(attendee.id);
+                                  // Normaliza status do banco (PRESENTE/AUSENTE) para o valor do <select>
+                                  const rawStatus = attendee.status || "";
+                                  const normalizedStatus =
+                                    rawStatus.toUpperCase() === "AUSENTE" ? "Ausente" : "Presente";
+                                  const lojaName = attendee.loja || "";
+                                  setLojaInputValue(lojaName);
+                                  setNewAttendee({
+                                    luc: attendee.luc || "",
+                                    loja: lojaName,
+                                    representante: attendee.representante || "",
+                                    status: normalizedStatus,
+                                  });
+                                  setIsAddModalOpen(true);
+                                }}
+                                className="text-gray-400 hover:text-[#8B1A1A] transition-colors shrink-0 min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                title="Editar presença"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setAttendeeToDelete({
+                                    id: attendee.id,
+                                    nome: attendee.representante,
+                                  })
+                                }
+                                className="text-gray-400 hover:text-red-600 transition-colors shrink-0 min-h-[40px] min-w-[40px] flex items-center justify-center"
+                                title="Remover presença"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -930,14 +999,18 @@ export function TrainingDetails({
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  Adicionar Participante
+                  {isEditing ? "Editar Participante" : "Adicionar Participante"}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  Insira os dados do lojista manualmente.
+                  {isEditing ? "Edite os dados do lojista selecionado." : "Insira os dados do lojista manualmente."}
                 </p>
               </div>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setIsEditing(false);
+                  setEditingAttendeeId(null);
+                }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -948,26 +1021,6 @@ export function TrainingDetails({
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label
-                    htmlFor="luc"
-                    className="text-sm font-medium"
-                    style={{ color: "#2A1A1A" }}
-                  >
-                    LUC
-                  </label>
-                  <input
-                    id="luc"
-                    required
-                    value={newAttendee.luc}
-                    onChange={(e) =>
-                      setNewAttendee({ ...newAttendee, luc: e.target.value })
-                    }
-                    placeholder="Ex: LUC-101"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-colors text-sm text-gray-900"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label
                     htmlFor="loja"
                     className="text-sm font-medium"
                     style={{ color: "#2A1A1A" }}
@@ -976,13 +1029,52 @@ export function TrainingDetails({
                   </label>
                   <input
                     id="loja"
+                    list="lojas-list"
                     required
-                    value={newAttendee.loja}
-                    onChange={(e) =>
-                      setNewAttendee({ ...newAttendee, loja: e.target.value })
-                    }
-                    placeholder="Ex: O Boticário"
+                    autoComplete="off"
+                    value={lojaInputValue}
+                    onChange={(e) => {
+                      const typed = e.target.value;
+                      setLojaInputValue(typed);
+                      // Tenta encontrar a loja exata para preencher o LUC
+                      const match = lojasCadastradas.find(
+                        (l) => l.nome.toLowerCase() === typed.toLowerCase()
+                      );
+                      if (match) {
+                        setNewAttendee({ ...newAttendee, loja: match.nome, luc: match.luc });
+                      } else {
+                        setNewAttendee({ ...newAttendee, loja: typed, luc: "" });
+                      }
+                    }}
+                    placeholder="Comece a digitar o nome da loja..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C4151F]/20 focus:border-[#C4151F] transition-colors text-sm text-gray-900"
+                  />
+                  <datalist id="lojas-list">
+                    {lojasCadastradas
+                      .filter((l) =>
+                        l.nome.toLowerCase().includes(lojaInputValue.toLowerCase())
+                      )
+                      .slice(0, 20)
+                      .map((l) => (
+                        <option key={l.luc} value={l.nome} />
+                      ))}
+                  </datalist>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="luc"
+                    className="text-sm font-medium"
+                    style={{ color: "#2A1A1A" }}
+                  >
+                    LUC
+                  </label>
+                  <input
+                    id="luc"
+                    readOnly
+                    value={newAttendee.luc}
+                    placeholder="Preenchido automaticamente ao selecionar a loja"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-500 cursor-not-allowed select-none"
                   />
                 </div>
 
@@ -1035,7 +1127,11 @@ export function TrainingDetails({
               <div className="mt-8 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setIsEditing(false);
+                    setEditingAttendeeId(null);
+                  }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-200"
                 >
                   Cancelar
