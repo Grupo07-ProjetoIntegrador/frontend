@@ -873,10 +873,15 @@ export function TrainingDetails({
                                 onClick={() => {
                                   setIsEditing(true);
                                   setEditingAttendeeId(attendee.id);
-                                  // Normaliza status do banco (PRESENTE/AUSENTE) para o valor do <select>
+                                  // Normaliza status do banco (PRESENTE/AUSENTE/PENDENTE) para o valor do <select>
                                   const rawStatus = attendee.status || "";
+                                  const statusMap: Record<string, string> = {
+                                    PRESENTE: "Presente",
+                                    AUSENTE: "Ausente",
+                                    PENDENTE: "Pendente",
+                                  };
                                   const normalizedStatus =
-                                    rawStatus.toUpperCase() === "AUSENTE" ? "Ausente" : "Presente";
+                                    statusMap[rawStatus.toUpperCase()] ?? "Pendente";
                                   const lojaName = attendee.loja || "";
                                   setLojaInputValue(lojaName);
                                   setNewAttendee({
@@ -1120,6 +1125,7 @@ export function TrainingDetails({
                   >
                     <option value="Presente">Presente</option>
                     <option value="Ausente">Ausente</option>
+                    <option value="Pendente">Pendente</option>
                   </select>
                 </div>
               </div>
